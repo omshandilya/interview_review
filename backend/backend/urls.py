@@ -21,8 +21,14 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/', include('interview_core.urls')), 
+    path('api/', include('interview_core.urls')),  # API endpoints
+    path('', include('interview_core.web_urls')),  # Web interface
 ]
+
+# Serve static files in development
+if settings.DEBUG:
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

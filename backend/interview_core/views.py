@@ -1,27 +1,17 @@
-# API_KEY = "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"
-import os
-import json
-import re
-import whisper
-import requests
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+import logging
 from rest_framework import generics, status, permissions
 from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from django.core.files.storage import default_storage
 from rest_framework import serializers
-from .models import User, InterviewQuestion, UserAnswer, SavedQuestion
+from django.contrib.auth.models import User
+from .models import InterviewQuestion, UserAnswer, SavedQuestion
 from .serializers import RegisterSerializer, InterviewQuestionSerializer, UserAnswerSerializer, UserSerializer, SavedQuestionSerializer
+from .services import InterviewService
+from .pagination import StandardResultsSetPagination
 
-# --------------------
-# Configuration
-# --------------------
-
-API_KEY = "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"
-WHISPER_MODEL = whisper.load_model("base")
-OPENROUTER_API_KEY = API_KEY
+logger = logging.getLogger(__name__)
 
 # --------------------
 # Auth Views
@@ -30,119 +20,69 @@ OPENROUTER_API_KEY = API_KEY
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = RegisterSerializer
+    permission_classes = []
 
 # --------------------
 # Questions
 # --------------------
 
 class InterviewQuestionListView(generics.ListAPIView):
-    queryset = InterviewQuestion.objects.all()
     serializer_class = InterviewQuestionSerializer
+    pagination_class = StandardResultsSetPagination
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        return InterviewQuestion.objects.filter(user=self.request.user).order_by('-created_at')
 
-def call_openrouter(topic):
-    prompt = f"""
-Generate 4 {topic} interview questions with their sample answers.
-Respond ONLY in valid JSON format as a list of objects like this:
 
-[
-  {{
-    "question": "What is Flutter?",
-    "answer": "Flutter is an open-source UI toolkit developed by Google for building mobile, web, and desktop apps from a single codebase."
-  }},
-  ...
-]
-
-Do not include any explanations or markdown (no ```json).
-"""
-
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "HTTP-Referer": "http://localhost",
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "model": "mistralai/mistral-7b-instruct",
-        "messages": [{"role": "user", "content": prompt}]
-    }
-
-    response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
-
-    if response.status_code == 200:
-        raw_content = response.json()['choices'][0]['message']['content']
-        match = re.search(r'\[\s*{.*?}\s*\]', raw_content, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group())
-            except json.JSONDecodeError as e:
-                return f"JSON parsing error: {str(e)}\nExtracted: {match.group()}"
-        else:
-            return f"Could not find JSON array in response:\n{raw_content}"
-
-    return f"Error: {response.status_code} - {response.text}"
 
 class GenerateQuestionsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, topic):
-        result = call_openrouter(topic)
-
-        if isinstance(result, str):
-            return Response({"error": result}, status=500)
-
-        created_questions = []
-        for item in result:
-            q = InterviewQuestion.objects.create(
-                user=request.user,
-                topic=topic,
-                question=item.get("question", ""),
-                answer=item.get("answer", "")
+        count = int(request.GET.get('count', 4))
+        difficulty = request.GET.get('difficulty', 'medium')
+        
+        try:
+            interview_service = InterviewService()
+            created_questions = interview_service.create_questions(request.user, topic, count, difficulty)
+            
+            serializer = InterviewQuestionSerializer(created_questions, many=True)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        except Exception as e:
+            logger.error(f"Failed to generate questions for topic {topic}: {str(e)}")
+            return Response(
+                {"error": "Failed to generate questions. Please try again later."}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-            created_questions.append(q)
-
-        serializer = InterviewQuestionSerializer(created_questions, many=True)
-        return Response(serializer.data, status=201)
+    
+    def post(self, request):
+        topic = request.data.get('topic')
+        count = int(request.data.get('count', 4))
+        difficulty = request.data.get('difficulty', 'medium')
+        
+        if not topic:
+            return Response({"error": "Topic is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            interview_service = InterviewService()
+            created_questions = interview_service.create_questions(request.user, topic, count, difficulty)
+            
+            # Redirect to interview page
+            from django.shortcuts import redirect
+            return redirect('interview', topic=topic)
+        
+        except Exception as e:
+            logger.error(f"Failed to generate questions for topic {topic}: {str(e)}")
+            return Response(
+                {"error": "Failed to generate questions. Please try again later."}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 # --------------------
 # Answer Handling
 # --------------------
-
-def transcribe_audio(file_path):
-    result = WHISPER_MODEL.transcribe(file_path)
-    return result['text']
-
-def compare_answers(reference, user_response):
-    prompt = f"""
-Compare these two answers and return a JSON object having detailed feedback with:
-- accuracy (percentage 0–100)
-- feedback
-
-Reference Answer: {reference}
-User Answer: {user_response}
-
-Respond like:
-{{
-  "accuracy": 74,
-  "feedback": "Good start, but you missed the explanation of Stateful Widgets."
-}}
-"""
-
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "HTTP-Referer": "http://localhost",
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "model": "mistralai/mistral-7b-instruct",
-        "messages": [{"role": "user", "content": prompt}]
-    }
-
-    response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
-    if response.status_code == 200:
-        return json.loads(response.json()['choices'][0]['message']['content'])
-    else:
-        return {"accuracy": 0, "feedback": "API failed."}
 
 class UserAnswerCreateView(APIView):
     parser_classes = (MultiPartParser, FormParser)
@@ -153,34 +93,26 @@ class UserAnswerCreateView(APIView):
         question_id = request.data.get('question_id')
 
         if not audio_file or not question_id:
-            return Response({"error": "Missing file or question ID"}, status=400)
+            return Response(
+                {"error": "Missing audio file or question ID"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        user = request.user
-        question = InterviewQuestion.objects.get(id=question_id, user=user)
-
-        temp_path = default_storage.save(audio_file.name, audio_file)
-        full_path = os.path.join(default_storage.location, temp_path)
-
-        user_text = transcribe_audio(full_path)
-
-        comparison = compare_answers(question.answer, user_text)
-        accuracy = comparison.get("accuracy", 0)
-        feedback = comparison.get("feedback", "No feedback")
-
-        question.is_answered = True
-        question.save()  
-
-        answer = UserAnswer.objects.create(
-            user=user,
-            question=question,
-            audio_file=audio_file,
-            user_text=user_text,
-            accuracy=accuracy,
-            feedback=feedback
-        )
-
-        serializer = UserAnswerSerializer(answer)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        try:
+            interview_service = InterviewService()
+            answer = interview_service.process_answer(
+                request.user, question_id, audio_file
+            )
+            
+            serializer = UserAnswerSerializer(answer)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        except Exception as e:
+            logger.error(f"Failed to process answer for question {question_id}: {str(e)}")
+            return Response(
+                {"error": "Failed to process your answer. Please try again."}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
 
 class FullUserReportView(APIView):
@@ -230,6 +162,7 @@ class SaveQuestionView(generics.CreateAPIView):
 class ListSavedQuestionsView(generics.ListAPIView):
     serializer_class = SavedQuestionSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         return SavedQuestion.objects.filter(user=self.request.user)

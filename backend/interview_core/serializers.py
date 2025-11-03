@@ -1,6 +1,6 @@
 from rest_framework import serializers, generics, permissions
 from django.contrib.auth.models import User
-from .models import InterviewQuestion, UserAnswer, SavedQuestion, UserAnswer
+from .models import InterviewQuestion, UserAnswer, SavedQuestion
 
 # -------------------- Registration Serializer --------------------
 class RegisterSerializer(serializers.ModelSerializer):
@@ -25,7 +25,9 @@ class UserAnswerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserAnswer
-        fields = '__all__'
+        fields = ['id', 'user', 'question', 'user_text', 'accuracy', 'feedback', 
+                 'strengths', 'improvements', 'missing_points', 'clarity_score', 
+                 'completeness_score', 'technical_accuracy_score', 'created_at']
 
 # -------------------- Profile Update Serializer --------------------
 class UserSerializer(serializers.ModelSerializer):

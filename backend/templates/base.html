@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Interview Review System{% endblock %}</title>
+    {% load static %}
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+    
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+        color: #e0e6ed;
+        line-height: 1.6;
+        min-height: 100vh;
+    }
+    
+    .navbar {
+        background: linear-gradient(90deg, #2c3e50 0%, #34495e 100%);
+        color: white;
+        padding: 1.5rem 0;
+        margin-bottom: 30px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    
+    .navbar .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .navbar h1 a {
+        color: #74b9ff;
+        text-decoration: none;
+        font-size: 1.8rem;
+        font-weight: 700;
+    }
+    
+    .nav-links {
+        display: flex;
+        gap: 10px;
+    }
+    
+    .nav-links a {
+        color: #ddd;
+        text-decoration: none;
+        padding: 10px 20px;
+        border-radius: 25px;
+        transition: all 0.3s ease;
+        background: rgba(255,255,255,0.1);
+        border: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    .nav-links a:hover {
+        background: rgba(116,185,255,0.2);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(116,185,255,0.3);
+    }
+    
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    
+    .alert {
+        padding: 15px 20px;
+        margin: 15px 0;
+        border-radius: 15px;
+        border-left: 4px solid;
+    }
+    
+    .alert-success {
+        background: rgba(0,184,148,0.1);
+        color: #00b894;
+        border-left-color: #00b894;
+        border: 1px solid rgba(0,184,148,0.2);
+    }
+    
+    .alert-error {
+        background: rgba(225,112,85,0.1);
+        color: #e17055;
+        border-left-color: #e17055;
+        border: 1px solid rgba(225,112,85,0.2);
+    }
+    </style>
+</head>
+<body>
+    {% if user.is_authenticated %}
+    <nav class="navbar">
+        <div class="container">
+            <h1><a href="{% url 'dashboard' %}">Interview Review</a></h1>
+            <div class="nav-links">
+                <a href="{% url 'dashboard' %}"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+                <a href="{% url 'saved_questions' %}"><i class="fas fa-star"></i> Saved Questions</a>
+                <a href="{% url 'profile' %}"><i class="fas fa-user"></i> Profile</a>
+                <a href="{% url 'logout' %}"><i class="fas fa-sign-out-alt"></i> Logout</a>
+            </div>
+        </div>
+    </nav>
+    {% endif %}
+
+    <main class="container">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+        
+        {% block content %}{% endblock %}
+    </main>
+
+    <script src="{% static 'js/main.js' %}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

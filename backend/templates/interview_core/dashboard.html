@@ -1,0 +1,572 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Interview Review{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <h1 class="welcome-text">👋 Welcome, {{ user.username }}!</h1>
+
+    <!-- Stats Overview -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>Total Questions</h3>
+            <div class="stat-number text-blue">{{ total_questions }}</div>
+        </div>
+        <div class="stat-card">
+            <h3>Answered</h3>
+            <div class="stat-number text-green">{{ answered_questions }}</div>
+        </div>
+        <div class="stat-card">
+            <h3>Completion Rate</h3>
+            <div class="stat-number text-yellow">{{ completion_rate }}%</div>
+        </div>
+        <div class="stat-card">
+            <h3>Average Accuracy</h3>
+            <div class="stat-number text-cyan">{{ average_accuracy }}%</div>
+        </div>
+    </div>
+
+    <!-- Interview Options -->
+    <div class="interview-options">
+        <!-- Topic-Based Interview -->
+        <div class="card start-card">
+            <h2><i class="fas fa-comments"></i> Topic-Based Interview</h2>
+
+        <form method="post" action="{% url 'generate_questions' %}">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label for="topic-input">Add Topics</label>
+                <input type="text" id="topic-input" name="topic-input" placeholder="Type a topic and press Enter (e.g., React, Python...)">
+                <div id="selected-topics" class="selected-topics">
+                    <span class="placeholder-text">Type topics above or click suggestions below</span>
+                </div>
+                <input type="hidden" id="topics-input" name="topics" required>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="question-count">Number of Questions</label>
+                    <select id="question-count" name="count" required>
+                        <option value="4" selected>4 Questions</option>
+                        <option value="5">5 Questions</option>
+                        <option value="6">6 Questions</option>
+                        <option value="7">7 Questions</option>
+                        <option value="8">8 Questions</option>
+                        <option value="9">9 Questions</option>
+                        <option value="10">10 Questions</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="difficulty">Difficulty Level</label>
+                    <select id="difficulty" name="difficulty" required>
+                        <option value="easy">🟢 Easy</option>
+                        <option value="medium" selected>🟡 Medium</option>
+                        <option value="hard">🔴 Hard</option>
+                    </select>
+                </div>
+            </div>
+
+            <button type="submit" class="generate-btn">
+                <i class="fas fa-magic"></i> Generate & Start Interview
+            </button>
+        </form>
+
+        <!-- Available Topics -->
+        <div class="topic-section">
+            <h4><i class="fas fa-lightbulb"></i> Popular Topics (Click to Add)</h4>
+            <div class="topic-buttons">
+                <button type="button" class="topic-btn" data-topic="React"><i class="fab fa-react"></i> React</button>
+                <button type="button" class="topic-btn" data-topic="JavaScript"><i class="fab fa-js-square"></i> JavaScript</button>
+                <button type="button" class="topic-btn" data-topic="Python"><i class="fab fa-python"></i> Python</button>
+                <button type="button" class="topic-btn" data-topic="Java"><i class="fab fa-java"></i> Java</button>
+                <button type="button" class="topic-btn" data-topic="Node.js"><i class="fab fa-node-js"></i> Node.js</button>
+                <button type="button" class="topic-btn" data-topic="Flutter"><i class="fab fa-google"></i> Flutter</button>
+                <button type="button" class="topic-btn" data-topic="System Design"><i class="fas fa-sitemap"></i> System Design</button>
+                <button type="button" class="topic-btn" data-topic="Django"><i class="fas fa-code"></i> Django</button>
+                <button type="button" class="topic-btn" data-topic="Machine Learning"><i class="fas fa-brain"></i> Machine Learning</button>
+                <button type="button" class="topic-btn" data-topic="DevOps"><i class="fas fa-server"></i> DevOps</button>
+                <button type="button" class="topic-btn" data-topic="Database"><i class="fas fa-database"></i> Database</button>
+                <button type="button" class="topic-btn" data-topic="AWS"><i class="fab fa-aws"></i> AWS</button>
+            </div>
+        </div>
+        </div>
+    </div>
+    
+    <!-- Resume Interview Button -->
+    <div class="resume-interview-section">
+        <a href="{% url 'resume_interview' %}" class="resume-interview-btn">
+            <div class="btn-icon">
+                <i class="fas fa-file-alt"></i>
+            </div>
+            <div class="btn-content">
+                <h3>Resume-Based Interview</h3>
+                <p>Upload your resume for personalized questions</p>
+            </div>
+            <div class="btn-arrow">
+                <i class="fas fa-arrow-right"></i>
+            </div>
+        </a>
+    </div>
+</div>
+
+<style>
+.dashboard-container {
+    padding: 40px;
+    color: #fff;
+    text-align: center;
+}
+
+.welcome-text {
+    font-weight: 700;
+    font-size: 2.2rem;
+    margin-bottom: 40px;
+    background: linear-gradient(90deg, #66ccff, #007bff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* Stats Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 25px;
+    margin-bottom: 40px;
+}
+
+.stat-card {
+    background: linear-gradient(145deg, #0b1b2b, #162d4a);
+    border-radius: 18px;
+    padding: 25px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+    transition: all 0.3s;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.5);
+}
+
+.stat-card h3 {
+    font-size: 1.1rem;
+    color: #a8c4ff;
+    margin-bottom: 10px;
+}
+
+.stat-number {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.text-blue { color: #3aa0ff; }
+.text-green { color: #29e07b; }
+.text-yellow { color: #ffd43b; }
+.text-cyan { color: #00e0ff; }
+
+/* Start New Interview Card */
+.start-card {
+    background: linear-gradient(145deg, #0b1b2b, #162d4a);
+    border-radius: 20px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+    padding: 40px;
+    text-align: left;
+    transition: 0.3s;
+}
+
+.start-card h2 {
+    text-align: center;
+    color: #aad4ff;
+    font-weight: 700;
+    margin-bottom: 30px;
+}
+
+.generate-btn {
+    background: linear-gradient(90deg, #007bff, #00c6ff);
+    color: white;
+    border: none;
+    padding: 12px 25px;
+    font-size: 1rem;
+    border-radius: 10px;
+    cursor: pointer;
+    margin-top: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+}
+
+.generate-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,123,255,0.4);
+}
+
+/* Topics Section */
+.topic-section {
+    margin-top: 40px;
+}
+
+.topic-section h4 {
+    color: #a8c4ff;
+    font-weight: 600;
+    margin-bottom: 15px;
+}
+
+.topic-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.topic-btn {
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px;
+    padding: 10px 15px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+
+.topic-btn:hover {
+    background: rgba(255,255,255,0.15);
+    transform: translateY(-2px);
+}
+
+/* Form Styling */
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    color: #74b9ff;
+    font-weight: 600;
+    margin-bottom: 8px;
+    font-size: 1rem;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 15px 20px;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 15px;
+    font-size: 16px;
+    background: rgba(255,255,255,0.05);
+    color: #e0e6ed;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+    box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #74b9ff;
+    background: rgba(255,255,255,0.1);
+    box-shadow: 0 0 20px rgba(116,185,255,0.3);
+    transform: translateY(-2px);
+}
+
+.form-group input::placeholder {
+    color: rgba(224,230,237,0.6);
+}
+
+/* Form Row Layout */
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+@media (max-width: 768px) {
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+}
+
+/* Select Dropdown Styling */
+select {
+    appearance: none;
+    background-image: url('data:image/svg+xml;charset=US-ASCII,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 5"><path fill="%2374b9ff" d="M2 0L0 2h4zm0 5L0 3h4z"/></svg>');
+    background-repeat: no-repeat;
+    background-position: right 15px center;
+    background-size: 12px;
+    padding-right: 40px;
+}
+
+select option {
+    background: #2c3e50;
+    color: #e0e6ed;
+    padding: 10px;
+}
+
+/* Selected Topics Area */
+.selected-topics {
+    min-height: 60px;
+    padding: 15px;
+    border: 2px dashed rgba(116,185,255,0.3);
+    border-radius: 15px;
+    background: rgba(116,185,255,0.05);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    transition: all 0.3s ease;
+}
+
+.selected-topics.has-topics {
+    border-color: #74b9ff;
+    background: rgba(116,185,255,0.1);
+}
+
+.placeholder-text {
+    color: rgba(224,230,237,0.5);
+    font-style: italic;
+}
+
+.selected-topic {
+    background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+    color: white;
+    padding: 8px 15px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: slideIn 0.3s ease;
+}
+
+.remove-topic {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    transition: all 0.2s ease;
+}
+
+.remove-topic:hover {
+    background: rgba(255,255,255,0.3);
+    transform: scale(1.1);
+}
+
+/* Topic Button States */
+.topic-btn.selected {
+    background: rgba(116,185,255,0.3);
+    border-color: #74b9ff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(116,185,255,0.3);
+}
+
+.topic-btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+@keyframes slideIn {
+    from { transform: translateX(-20px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+/* Interview Options Layout */
+.interview-options {
+    max-width: 800px;
+    margin: 0 auto 40px auto;
+}
+
+/* Resume Interview Section */
+.resume-interview-section {
+    max-width: 800px;
+    margin: 0 auto 30px auto;
+}
+
+.resume-interview-btn {
+    display: flex;
+    align-items: center;
+    background: linear-gradient(135deg, #ffc107 0%, #ff8f00 100%);
+    border-radius: 20px;
+    padding: 25px 30px;
+    text-decoration: none;
+    color: #1a1a1a;
+    transition: all 0.3s ease;
+    box-shadow: 0 8px 25px rgba(255,193,7,0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.resume-interview-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.5s;
+}
+
+.resume-interview-btn:hover::before {
+    left: 100%;
+}
+
+.resume-interview-btn:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 35px rgba(255,193,7,0.4);
+}
+
+.btn-icon {
+    background: rgba(26,26,26,0.1);
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 20px;
+    font-size: 1.5rem;
+}
+
+.btn-content {
+    flex: 1;
+}
+
+.btn-content h3 {
+    margin: 0 0 5px 0;
+    font-size: 1.3rem;
+    font-weight: 700;
+}
+
+.btn-content p {
+    margin: 0;
+    opacity: 0.8;
+    font-size: 0.95rem;
+}
+
+.btn-arrow {
+    font-size: 1.2rem;
+    transition: transform 0.3s ease;
+}
+
+.resume-interview-btn:hover .btn-arrow {
+    transform: translateX(5px);
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+}
+
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+class MultiTopicSelector {
+    constructor() {
+        this.selectedTopics = [];
+        this.init();
+    }
+    
+    init() {
+        const topicButtons = document.querySelectorAll('.topic-btn');
+        const topicInput = document.getElementById('topic-input');
+        
+        // Handle clicking predefined topics
+        topicButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const topic = e.currentTarget.dataset.topic;
+                this.addTopic(topic);
+                this.updateUI();
+            });
+        });
+        
+        // Handle typing custom topics
+        if (topicInput) {
+            topicInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const topic = e.target.value.trim();
+                    if (topic && !this.selectedTopics.includes(topic)) {
+                        this.addTopic(topic);
+                        e.target.value = '';
+                        this.updateUI();
+                    }
+                }
+            });
+        }
+    }
+
+
+
+
+
+    addTopic(topic) {
+        this.selectedTopics.push(topic);
+    }
+
+    removeTopic(topic) {
+        this.selectedTopics = this.selectedTopics.filter(t => t !== topic);
+    }
+
+    updateUI() {
+        const container = document.getElementById('selected-topics');
+        const input = document.getElementById('topics-input');
+        const topicButtons = document.querySelectorAll('.topic-btn');
+        
+        // Update selected topics display
+        if (this.selectedTopics.length === 0) {
+            container.innerHTML = '<span class="placeholder-text">Type topics above or click suggestions below</span>';
+            container.classList.remove('has-topics');
+        } else {
+            container.classList.add('has-topics');
+            container.innerHTML = this.selectedTopics.map(topic => `
+                <div class="selected-topic">
+                    <i class="fas fa-tag"></i>
+                    ${topic}
+                    <button type="button" class="remove-topic" onclick="topicSelector.removeTopic('${topic}'); topicSelector.updateUI();">
+                        ×
+                    </button>
+                </div>
+            `).join('');
+        }
+        
+        // Update hidden input
+        input.value = this.selectedTopics.join(',');
+        
+        // Update button states
+        topicButtons.forEach(btn => {
+            const topic = btn.dataset.topic;
+            if (this.selectedTopics.includes(topic)) {
+                btn.classList.add('selected');
+            } else {
+                btn.classList.remove('selected');
+            }
+            
+            btn.classList.remove('disabled');
+        });
+    }
+}
+
+// Initialize when page loads
+let topicSelector;
+document.addEventListener('DOMContentLoaded', function() {
+    topicSelector = new MultiTopicSelector();
+});
+</script>
+{% endblock %}
