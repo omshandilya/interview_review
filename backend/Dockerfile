@@ -6,12 +6,11 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # ---------- Environment Variables ----------
-# Prevent Python from writing .pyc files and enable unbuffered output
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 # ---------- Install System Dependencies ----------
-# libsndfile1 and ffmpeg are useful for audio/Whisper-related features
+# Includes ffmpeg and libsndfile1 (used for Whisper/audio)
 RUN apt-get update && apt-get install -y \
     build-essential \
     libsndfile1 \
@@ -25,10 +24,14 @@ COPY . /app
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
+# ---------- Collect Static Files ----------
+RUN python manage.py collectstatic --noinput || true
+
 # ---------- Expose Port ----------
-# Render expects apps to listen on port 10000
+# Render sets $PORT automatically (default 10000)
 EXPOSE 10000
 
-# ---------- Run Migrations & Start Server ----------
-# When deploying on Render, this will start your Django app
-CMD python manage.py migrate && gunicorn backend.wsgi:application --bind 0.0.0.0:10000
+# ---------- Run Migrations & Start Gunicorn ----------
+# --noinput prevents Django from waiting for user input
+# --timeout 180 ensures slow startups (e.g. transformers/torch) don’t fail
+CMD python manage.py migrate --noinput && gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT --timeout 180
