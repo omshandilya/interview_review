@@ -2,8 +2,11 @@ services:
   - type: web
     name: interview-review
     env: python
+    plan: free
     rootDir: backend
     buildCommand: "./build.sh"
     startCommand: "gunicorn backend.wsgi:application"
     envVars:
-      PYTHON_VERSION: 3.10.0
+      - key: PYTHON_VERSION
+        value: 3.10.13
+
