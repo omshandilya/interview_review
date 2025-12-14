@@ -204,24 +204,37 @@ class AudioService:
     
     def __init__(self):
         self.transcriber = None
-        if TRANSFORMERS_AVAILABLE:
-            try:
-                self.transcriber = pipeline(
-                    "automatic-speech-recognition",
-                    model="openai/whisper-tiny",
-                    device=-1  # Use CPU
-                )
-            except Exception as e:
-                print(f"Failed to load Whisper model: {e}")
+        self._model_loaded = False
+    
+    def _load_model(self):
+        """Lazy load Whisper model only when needed"""
+        if self._model_loaded or not TRANSFORMERS_AVAILABLE:
+            return
+        
+        try:
+            import gc
+            self.transcriber = pipeline(
+                "automatic-speech-recognition",
+                model="openai/whisper-tiny",
+                device=-1  # Use CPU
+            )
+            self._model_loaded = True
+            gc.collect()  # Clean up memory after loading
+        except Exception as e:
+            print(f"Failed to load Whisper model: {e}")
+            self.transcriber = None
     
     def transcribe_audio(self, audio_file):
         """Transcribe audio file to text using Hugging Face Whisper"""
+        # Lazy load model only when transcription is needed
+        self._load_model()
+        
         if not self.transcriber:
             return "Audio transcription unavailable. Please type your answer."
         
         try:
             import tempfile
-            import numpy as np
+            import gc
             
             # Save audio to temporary file
             with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
@@ -234,13 +247,18 @@ class AudioService:
             
             # Transcribe using Hugging Face pipeline
             result = self.transcriber(audio_data)
+            transcribed_text = result['text']
             
-            # Clean up temp file
+            # Clean up temp file and memory
             os.unlink(temp_path)
+            del audio_data
+            gc.collect()
             
-            return result['text']
+            return transcribed_text
             
         except Exception as e:
+            import gc
+            gc.collect()
             return f"Transcription failed: Please type your answer."
 
 
