@@ -10,6 +10,9 @@ from .models import InterviewQuestion, UserAnswer, SavedQuestion
 from .services import InterviewService
 from .serializers import RegisterSerializer
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 def login_view(request):
     if request.user.is_authenticated:
@@ -47,30 +50,35 @@ def register_view(request):
 
 @login_required
 def dashboard_view(request):
-    # Optimized user stats with single query
     from django.db.models import Count, Avg
+    from django.core.cache import cache
     
-    stats = InterviewQuestion.objects.filter(user=request.user).aggregate(
-        total_questions=Count('id'),
-        answered_questions=Count('id', filter=models.Q(is_answered=True))
-    )
+    cache_key = f'dashboard_template_{request.user.id}'
+    context = cache.get(cache_key)
     
-    total_questions = stats['total_questions']
-    answered_questions = stats['answered_questions']
-    completion_rate = (answered_questions / total_questions * 100) if total_questions > 0 else 0
-    
-    # Get average accuracy with single query
-    avg_accuracy_result = UserAnswer.objects.filter(user=request.user).aggregate(
-        avg_accuracy=Avg('accuracy')
-    )
-    avg_accuracy = avg_accuracy_result['avg_accuracy'] or 0
-    
-    context = {
-        'total_questions': total_questions,
-        'answered_questions': answered_questions,
-        'completion_rate': round(completion_rate, 1),
-        'average_accuracy': round(avg_accuracy, 1),
-    }
+    if not context:
+        stats = InterviewQuestion.objects.filter(user=request.user).aggregate(
+            total_questions=Count('id'),
+            answered_questions=Count('id', filter=models.Q(is_answered=True))
+        )
+        
+        total_questions = stats['total_questions']
+        answered_questions = stats['answered_questions']
+        completion_rate = (answered_questions / total_questions * 100) if total_questions > 0 else 0
+        
+        avg_accuracy_result = UserAnswer.objects.filter(user=request.user).aggregate(
+            avg_accuracy=Avg('accuracy')
+        )
+        avg_accuracy = avg_accuracy_result['avg_accuracy'] or 0
+        
+        context = {
+            'total_questions': total_questions,
+            'answered_questions': answered_questions,
+            'completion_rate': round(completion_rate, 1),
+            'average_accuracy': round(avg_accuracy, 1),
+        }
+        # Cache for 5 minutes
+        cache.set(cache_key, context, 300)
     
     return render(request, 'interview_core/dashboard.html', context)
 
@@ -161,7 +169,7 @@ def submit_answer_view(request):
             question_id = request.POST.get('question_id')
             audio_file = request.FILES.get('audio_file')
             
-            print(f"DEBUG: question_id={question_id}, audio_file={audio_file}")
+            logger.debug("submit_answer: question_id=%s, audio_file=%s", question_id, audio_file)
             
             if not question_id or not audio_file:
                 return JsonResponse({'error': 'Missing data'}, status=400)
@@ -182,9 +190,7 @@ def submit_answer_view(request):
             })
             
         except Exception as e:
-            print(f"ERROR in submit_answer_view: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("Error in submit_answer_view")
             return JsonResponse({'error': str(e)}, status=500)
     
     return JsonResponse({'error': 'Invalid method'}, status=405)
@@ -226,27 +232,20 @@ def saved_questions_view(request):
 
 @login_required
 def upload_resume_view(request):
-    print(f"DEBUG: Request method: {request.method}")
-    print(f"DEBUG: Request POST keys: {list(request.POST.keys())}")
-    print(f"DEBUG: Request FILES keys: {list(request.FILES.keys())}")
+    logger.debug("upload_resume: method=%s, POST keys=%s, FILES keys=%s", request.method, list(request.POST.keys()), list(request.FILES.keys()))
     
     if request.method == 'POST':
-        print(f"DEBUG: POST data: {request.POST}")
-        print(f"DEBUG: FILES data: {request.FILES}")
         
         resume_file = request.FILES.get('resume')
         count = int(request.POST.get('count', 4))
         difficulty = request.POST.get('difficulty', 'medium')
         
-        print(f"DEBUG: resume_file={resume_file}")
-        print(f"DEBUG: count={count}")
-        print(f"DEBUG: difficulty={difficulty}")
+        logger.debug("upload_resume: file=%s, count=%d, difficulty=%s", resume_file, count, difficulty)
         
         # Store count in session for interview view
         request.session['interview_count'] = count
         
-        print(f"DEBUG: Checking if resume_file exists...")
-        print(f"DEBUG: About to start resume processing")
+        logger.debug("Starting resume processing")
         
         if resume_file:
             try:
@@ -267,10 +266,9 @@ def upload_resume_view(request):
                 )
                 # File is automatically deleted after processing
                 
-                print(f"\n=== STEP 4: RESUME SAVED TO DATABASE ===")
-                print(f"DEBUG: Resume saved with ID: {resume.id}")
+                logger.debug("Resume saved with ID: %d", resume.id)
                 
-                print(f"\n=== STEP 5: PREPARING KEYWORDS FOR AI MODEL ===")
+                logger.debug("Preparing keywords for AI model")
                 # Generate questions based on resume
                 interview_service = InterviewService()
                 all_questions = []
@@ -282,15 +280,15 @@ def upload_resume_view(request):
                     'Projects': parsed_data['projects'][:2]  # Top 2 projects
                 }
                 
-                print(f"DEBUG: Categories prepared for AI: {categories}")
+                logger.debug("Categories prepared: %s", categories)
                 questions_per_category = max(1, count // len([c for c in categories.values() if c]))
-                print(f"DEBUG: Questions per category: {questions_per_category}")
+                logger.debug("Questions per category: %d", questions_per_category)
                 
-                print(f"\n=== STEP 6: GENERATING QUESTIONS WITH AI MODEL ===")
+                logger.debug("Generating questions with AI model")
                 for category, items in categories.items():
                     if items:
                         topic_context = f"{category}: {', '.join(items)}"
-                        print(f"DEBUG: Sending to AI model - Topic: {topic_context}")
+                        logger.debug("Sending to AI: topic=%s", topic_context)
                         try:
                             questions = interview_service.create_questions(
                                 request.user, 
@@ -299,9 +297,9 @@ def upload_resume_view(request):
                                 difficulty
                             )
                             all_questions.extend(questions)
-                            print(f"DEBUG: AI SUCCESS - Generated {len(questions)} questions for {category}")
+                            logger.info("Generated %d questions for %s", len(questions), category)
                         except Exception as e:
-                            print(f"DEBUG: AI FAILED for {category}: {str(e)}")
+                            logger.warning("AI failed for %s: %s", category, str(e))
                             # Create fallback question for this category
                             from .models import InterviewQuestion
                             fallback_question = InterviewQuestion.objects.create(
@@ -311,14 +309,14 @@ def upload_resume_view(request):
                                 answer=f"Describe your background and expertise in {category.lower()}."
                             )
                             all_questions.append(fallback_question)
-                            print(f"DEBUG: Created fallback question for {category}")
+                            logger.debug("Created fallback question for %s", category)
                 
-                print(f"\n=== STEP 7: FINALIZING QUESTIONS ===")
+                logger.debug("Finalizing questions")
                 if all_questions:
-                    print(f"DEBUG: SUCCESS - Total generated {len(all_questions)} questions")
+                    logger.info("Generated total %d questions from resume", len(all_questions))
                     messages.success(request, f'Generated {len(all_questions)} personalized questions based on your resume!')
                 else:
-                    print("DEBUG: No questions generated, creating fallback")
+                    logger.warning("No questions generated, creating fallback")
                     # Create a fallback question if everything fails
                     from .models import InterviewQuestion
                     fallback_question = InterviewQuestion.objects.create(
@@ -329,18 +327,16 @@ def upload_resume_view(request):
                     )
                     messages.success(request, 'Generated personalized questions based on your resume!')
                 
-                print(f"\n=== STEP 8: REDIRECTING TO INTERVIEW ===")
+                logger.debug("Redirecting to interview")
                 
                 # Delete resume data after questions are generated
                 resume.delete()
-                print(f"DEBUG: Resume data deleted after question generation")
+                logger.debug("Resume data deleted after question generation")
                 
                 return redirect('interview', topic='Resume-Based')
                 
             except Exception as e:
-                print(f"ERROR in upload_resume_view: {str(e)}")
-                import traceback
-                traceback.print_exc()
+                logger.exception("Error in upload_resume_view")
                 messages.error(request, f'Failed to process resume: {str(e)}')
         else:
             messages.error(request, 'Please upload a resume file.')

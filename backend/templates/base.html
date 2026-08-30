@@ -6,6 +6,7 @@
     <title>{% block title %}Interview Review System{% endblock %}</title>
     {% load static %}
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
     * {
         margin: 0;
@@ -14,19 +15,36 @@
     }
     
     body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+        background: linear-gradient(135deg, #0f0c29 0%, #1a1a2e 30%, #16213e 60%, #0f3460 100%);
         color: #e0e6ed;
         line-height: 1.6;
         min-height: 100vh;
+        overflow-x: hidden;
+    }
+
+    /* Page load animation */
+    body > * {
+        animation: fadeInUp 0.5s ease-out;
+    }
+
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
     }
     
     .navbar {
-        background: linear-gradient(90deg, #2c3e50 0%, #34495e 100%);
+        background: rgba(20, 30, 48, 0.85);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
         color: white;
-        padding: 1.5rem 0;
+        padding: 1rem 0;
         margin-bottom: 30px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        box-shadow: 0 4px 30px rgba(0,0,0,0.4);
+        border-bottom: 1px solid rgba(116,185,255,0.1);
+        position: sticky;
+        top: 0;
+        z-index: 1000;
     }
     
     .navbar .container {
@@ -37,33 +55,87 @@
         justify-content: space-between;
         align-items: center;
     }
+
+    .navbar .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .navbar .brand-icon {
+        width: 38px;
+        height: 38px;
+        background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        color: white;
+        box-shadow: 0 4px 15px rgba(116,185,255,0.3);
+    }
     
     .navbar h1 a {
-        color: #74b9ff;
+        color: #fff;
         text-decoration: none;
-        font-size: 1.8rem;
+        font-size: 1.4rem;
         font-weight: 700;
+        letter-spacing: -0.3px;
+    }
+
+    .navbar h1 a span {
+        color: #74b9ff;
+    }
+
+    /* Hamburger menu */
+    .nav-toggle {
+        display: none;
+        background: none;
+        border: none;
+        color: #e0e6ed;
+        font-size: 1.5rem;
+        cursor: pointer;
+        padding: 8px;
+        border-radius: 8px;
+        transition: background 0.3s;
+    }
+    .nav-toggle:hover {
+        background: rgba(255,255,255,0.1);
     }
     
     .nav-links {
         display: flex;
-        gap: 10px;
+        gap: 6px;
+        align-items: center;
     }
     
     .nav-links a {
-        color: #ddd;
+        color: #ccc;
         text-decoration: none;
-        padding: 10px 20px;
-        border-radius: 25px;
-        transition: all 0.3s ease;
-        background: rgba(255,255,255,0.1);
-        border: 1px solid rgba(255,255,255,0.1);
+        padding: 9px 16px;
+        border-radius: 10px;
+        transition: all 0.25s ease;
+        background: transparent;
+        border: 1px solid transparent;
+        font-size: 0.9rem;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 6px;
     }
     
-    .nav-links a:hover {
-        background: rgba(116,185,255,0.2);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 15px rgba(116,185,255,0.3);
+    .nav-links a:hover, .nav-links a.active {
+        background: rgba(116,185,255,0.15);
+        color: #74b9ff;
+        border-color: rgba(116,185,255,0.2);
+    }
+
+    .nav-links a.nav-logout {
+        color: #e17055;
+    }
+    .nav-links a.nav-logout:hover {
+        background: rgba(225,112,85,0.15);
+        border-color: rgba(225,112,85,0.2);
     }
     
     .container {
@@ -75,8 +147,17 @@
     .alert {
         padding: 15px 20px;
         margin: 15px 0;
-        border-radius: 15px;
+        border-radius: 12px;
         border-left: 4px solid;
+        animation: slideIn 0.4s ease;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    @keyframes slideIn {
+        from { transform: translateX(-30px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
     }
     
     .alert-success {
@@ -84,6 +165,7 @@
         color: #00b894;
         border-left-color: #00b894;
         border: 1px solid rgba(0,184,148,0.2);
+        border-left: 4px solid #00b894;
     }
     
     .alert-error {
@@ -91,6 +173,56 @@
         color: #e17055;
         border-left-color: #e17055;
         border: 1px solid rgba(225,112,85,0.2);
+        border-left: 4px solid #e17055;
+    }
+
+    /* Footer */
+    .site-footer {
+        text-align: center;
+        padding: 30px 20px;
+        margin-top: 60px;
+        border-top: 1px solid rgba(255,255,255,0.06);
+        color: #5a6a7a;
+        font-size: 0.85rem;
+    }
+    .site-footer a {
+        color: #74b9ff;
+        text-decoration: none;
+    }
+    .site-footer a:hover {
+        text-decoration: underline;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #1a1a2e; }
+    ::-webkit-scrollbar-thumb { background: #34495e; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #4a6fa5; }
+
+    /* Mobile responsive navbar */
+    @media (max-width: 768px) {
+        .nav-toggle { display: block; }
+        .nav-links {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: rgba(20, 30, 48, 0.97);
+            backdrop-filter: blur(20px);
+            flex-direction: column;
+            padding: 15px;
+            gap: 5px;
+            border-bottom: 1px solid rgba(116,185,255,0.1);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .nav-links.open { display: flex; }
+        .nav-links a { 
+            padding: 12px 16px;
+            border-radius: 10px;
+            width: 100%;
+        }
+        .navbar .container { position: relative; }
     }
     </style>
 </head>
@@ -98,12 +230,18 @@
     {% if user.is_authenticated %}
     <nav class="navbar">
         <div class="container">
-            <h1><a href="{% url 'dashboard' %}">Interview Review</a></h1>
-            <div class="nav-links">
-                <a href="{% url 'dashboard' %}"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
-                <a href="{% url 'saved_questions' %}"><i class="fas fa-star"></i> Saved Questions</a>
-                <a href="{% url 'profile' %}"><i class="fas fa-user"></i> Profile</a>
-                <a href="{% url 'logout' %}"><i class="fas fa-sign-out-alt"></i> Logout</a>
+            <div class="brand">
+                <div class="brand-icon"><i class="fas fa-code"></i></div>
+                <h1><a href="{% url 'dashboard' %}">Interview<span>Review</span></a></h1>
+            </div>
+            <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="nav-links" id="navLinks">
+                <a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+                <a href="{% url 'saved_questions' %}" class="{% if request.resolver_match.url_name == 'saved_questions' %}active{% endif %}"><i class="fas fa-star"></i> Saved</a>
+                <a href="{% url 'profile' %}" class="{% if request.resolver_match.url_name == 'profile' %}active{% endif %}"><i class="fas fa-user"></i> Profile</a>
+                <a href="{% url 'logout' %}" class="nav-logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
             </div>
         </div>
     </nav>
@@ -119,6 +257,34 @@
         {% block content %}{% endblock %}
     </main>
 
+    <footer class="site-footer">
+        <p>Built with ❤️ using Django &amp; AI &bull; <a href="{% url 'dashboard' %}">InterviewReview</a></p>
+    </footer>
+
+    <script>
+    // Mobile nav toggle
+    document.addEventListener('DOMContentLoaded', function() {
+        const toggle = document.getElementById('navToggle');
+        const links = document.getElementById('navLinks');
+        if (toggle && links) {
+            toggle.addEventListener('click', () => {
+                links.classList.toggle('open');
+                const icon = toggle.querySelector('i');
+                icon.classList.toggle('fa-bars');
+                icon.classList.toggle('fa-times');
+            });
+        }
+        // Auto-dismiss alerts
+        document.querySelectorAll('.alert').forEach(alert => {
+            setTimeout(() => {
+                alert.style.transition = 'opacity 0.5s, transform 0.5s';
+                alert.style.opacity = '0';
+                alert.style.transform = 'translateX(-20px)';
+                setTimeout(() => alert.remove(), 500);
+            }, 4000);
+        });
+    });
+    </script>
     <script src="{% static 'js/main.js' %}"></script>
     {% block scripts %}{% endblock %}
 </body>

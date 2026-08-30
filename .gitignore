@@ -18,6 +18,7 @@ db.sqlite3
 db.sqlite3-journal
 /media
 /staticfiles
+logs/
 
 # Environment variables
 .env
@@ -38,3 +39,4 @@ node_modules/
 # Build files
 dist/
 build/
+.superbrain/

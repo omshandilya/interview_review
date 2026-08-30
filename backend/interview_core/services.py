@@ -1,10 +1,12 @@
 import os
 import json
 import re
+import logging
 import requests
 from django.conf import settings
-from django.core.files.storage import default_storage
 from .models import InterviewQuestion, UserAnswer
+
+logger = logging.getLogger(__name__)
 
 try:
     from transformers import pipeline
@@ -26,6 +28,8 @@ class AIService:
     
     def generate_questions(self, topic, count=4, difficulty="medium"):
         """Generate interview questions for a given topic with specified difficulty"""
+        # Cap count to prevent API abuse
+        count = min(count, 10)
         
         difficulty_descriptions = {
             "easy": "basic concepts, simple definitions, and fundamental knowledge",
@@ -67,14 +71,15 @@ Validation rules:
 - REMEMBER: Only {count} questions, not more!
 """
         
-        print(f"DEBUG AIService: Requesting {count} questions for '{topic}'")
+        logger.debug("Requesting %d questions for topic '%s'", count, topic)
         
         try:
             response = self._make_api_request(prompt)
             questions = self._parse_json_response(response)
-            print(f"DEBUG AIService: AI returned {len(questions)} questions, slicing to {count}")
+            logger.debug("AI returned %d questions, slicing to %d", len(questions), count)
             return questions[:count]  # Force exact count
         except Exception as e:
+            logger.error("Failed to generate questions for '%s': %s", topic, str(e))
             raise Exception(f"Failed to generate questions: {str(e)}")
     
     def compare_answers(self, reference_answer, user_answer, question_text=""):
@@ -149,12 +154,17 @@ IMPORTANT:
             "max_tokens": 2000
         }
         
-        response = requests.post(self.base_url, headers=headers, json=payload, timeout=30)
-        
-        if response.status_code != 200:
-            raise Exception(f"API request failed: {response.status_code} - {response.text}")
-        
-        return response.json()['choices'][0]['message']['content']
+        try:
+            response = requests.post(self.base_url, headers=headers, json=payload, timeout=30)
+            
+            if response.status_code != 200:
+                raise Exception(f"API request failed with status {response.status_code}")
+            
+            return response.json()['choices'][0]['message']['content']
+        except requests.exceptions.RequestException:
+            raise Exception("Failed to connect to AI service")
+        except (KeyError, IndexError):
+            raise Exception("Invalid response from AI service")
     
     def _parse_json_response(self, raw_content):
         """Parse JSON from API response with better error handling"""
@@ -221,7 +231,7 @@ class AudioService:
             self._model_loaded = True
             gc.collect()  # Clean up memory after loading
         except Exception as e:
-            print(f"Failed to load Whisper model: {e}")
+            logger.error("Failed to load Whisper model: %s", str(e))
             self.transcriber = None
     
     def transcribe_audio(self, audio_file):
@@ -259,7 +269,8 @@ class AudioService:
         except Exception as e:
             import gc
             gc.collect()
-            return f"Transcription failed: Please type your answer."
+            logger.error("Transcription failed: %s", str(e))
+            return "Transcription failed: Please type your answer."
 
 
 class InterviewService:
@@ -270,14 +281,14 @@ class InterviewService:
         try:
             self.audio_service = AudioService()
         except Exception as e:
-            print(f"AudioService initialization failed: {e}")
+            logger.error("AudioService initialization failed: %s", str(e))
             self.audio_service = None
     
     def create_questions(self, user, topic, count=4, difficulty="medium"):
         """Create interview questions for a user with specified count and difficulty"""
         questions_data = self.ai_service.generate_questions(topic, count, difficulty)
         
-        print(f"DEBUG InterviewService: Creating {len(questions_data)} questions in database")
+        logger.debug("Creating %d questions in database for user %s", len(questions_data), user.username)
         
         created_questions = []
         for item in questions_data:
@@ -289,7 +300,7 @@ class InterviewService:
             )
             created_questions.append(question)
         
-        print(f"DEBUG InterviewService: Created {len(created_questions)} questions")
+        logger.info("Created %d questions for user %s, topic '%s'", len(created_questions), user.username, topic)
         return created_questions
     
     def process_answer(self, user, question_id, audio_file):

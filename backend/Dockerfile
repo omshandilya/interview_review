@@ -27,11 +27,14 @@ RUN pip install -r requirements.txt
 # ---------- Collect Static Files ----------
 RUN python manage.py collectstatic --noinput || true
 
+# ---------- Create Logs Directory ----------
+RUN mkdir -p /app/logs
+
 # ---------- Expose Port ----------
-# Render sets $PORT automatically (default 10000)
 EXPOSE 10000
 
 # ---------- Run Migrations & Start Gunicorn ----------
-# --noinput prevents Django from waiting for user input
-# --timeout 180 ensures slow startups (e.g. transformers/torch) don’t fail
-CMD python manage.py migrate --noinput && gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT --timeout 180
+# --workers 3 handles concurrent users
+# --timeout 120 for AI API calls
+# --access-logfile logs requests to stdout
+CMD python manage.py migrate --noinput && gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --timeout 120 --access-logfile -

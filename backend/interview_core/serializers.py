@@ -1,4 +1,4 @@
-from rest_framework import serializers, generics, permissions
+from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import InterviewQuestion, UserAnswer, SavedQuestion
 
@@ -59,17 +59,11 @@ class SavedQuestionSerializer(serializers.ModelSerializer):
         if answer:
             return {
                 "id": answer.id,
-                "audio_file": answer.audio_file.url if answer.audio_file else None,
+                "user_text": answer.user_text,
+                "accuracy": answer.accuracy,
                 "feedback": answer.feedback,
                 "submitted_at": answer.created_at,
             }
         return None
-
-class ListSavedQuestionsView(generics.ListAPIView):
-    serializer_class = SavedQuestionSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return SavedQuestion.objects.filter(user=self.request.user)
 
 
