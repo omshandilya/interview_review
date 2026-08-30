@@ -1,32 +1,35 @@
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from datetime import timedelta
-import os
-from interview_core.models import UserAnswer
+from interview_core.models import UserAnswer, InterviewQuestion
+
 
 class Command(BaseCommand):
-    help = 'Clean up old audio files older than specified days'
+    help = 'Clean up old unanswered questions and orphaned data older than specified days'
 
     def add_arguments(self, parser):
         parser.add_argument(
             '--days',
             type=int,
-            default=30,
-            help='Delete files older than this many days (default: 30)'
+            default=90,
+            help='Delete records older than this many days (default: 90)'
         )
 
     def handle(self, *args, **options):
         days = options['days']
         cutoff_date = timezone.now() - timedelta(days=days)
-        
-        old_answers = UserAnswer.objects.filter(created_at__lt=cutoff_date)
-        deleted_count = 0
-        
-        for answer in old_answers:
-            if answer.audio_file and os.path.exists(answer.audio_file.path):
-                os.remove(answer.audio_file.path)
-                deleted_count += 1
-        
+
+        # Delete old unanswered questions
+        old_unanswered = InterviewQuestion.objects.filter(
+            created_at__lt=cutoff_date,
+            is_answered=False
+        )
+        unanswered_count = old_unanswered.count()
+        old_unanswered.delete()
+
         self.stdout.write(
-            self.style.SUCCESS(f'Successfully deleted {deleted_count} old audio files')
+            self.style.SUCCESS(
+                f'Cleaned up {unanswered_count} old unanswered questions '
+                f'(older than {days} days)'
+            )
         )

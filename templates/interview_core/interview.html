@@ -1,0 +1,453 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ topic }} Interview - Interview Review{% endblock %}
+
+{% block content %}
+<style>
+/* Interview Page Styling */
+.card {
+    background: linear-gradient(145deg, #0b1b2b, #162d4a);
+    border-radius: 20px;
+    padding: 30px;
+    margin-bottom: 25px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #fff;
+}
+
+.card h2, .card h3, .card h4 {
+    color: #74b9ff;
+    margin-bottom: 20px;
+}
+
+.question-progress {
+    background: rgba(116,185,255,0.2);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    color: #74b9ff;
+    border: 1px solid rgba(116,185,255,0.3);
+}
+
+/* Recording Controls */
+.recording-controls {
+    text-align: center;
+    padding: 20px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 15px;
+    margin-bottom: 20px;
+}
+
+.recording-btn {
+    padding: 15px 30px;
+    border-radius: 12px;
+    border: none;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 10px;
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #28a745, #20c997);
+    color: white;
+}
+
+.btn-success:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(40,167,69,0.4);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #dc3545, #e74c3c);
+    color: white;
+}
+
+.btn-danger:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(220,53,69,0.4);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #007bff, #0056b3);
+    color: white;
+    padding: 12px 25px;
+    border-radius: 10px;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,123,255,0.4);
+}
+
+.btn-warning {
+    background: linear-gradient(135deg, #ffc107, #e0a800);
+    color: #212529;
+    padding: 8px 16px;
+    border-radius: 8px;
+    text-decoration: none;
+    border: none;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+}
+
+.btn-warning:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(255,193,7,0.4);
+}
+
+.floating {
+    float: right;
+}
+
+.recording-pulse {
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+/* Feedback Section */
+.feedback-section {
+    background: linear-gradient(145deg, #1a2332, #2d3748);
+    border-radius: 18px;
+    padding: 25px;
+    border: 2px solid rgba(116,185,255,0.3);
+}
+
+.feedback-section h4 {
+    color: #ffc107;
+    text-align: center;
+    margin-bottom: 25px;
+    font-size: 1.4rem;
+}
+
+.score-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.score-item {
+    background: rgba(255,255,255,0.05);
+    padding: 15px;
+    border-radius: 10px;
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.score-badge {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: bold;
+    margin-top: 5px;
+    padding: 5px 10px;
+    border-radius: 15px;
+    background: linear-gradient(135deg, #74b9ff, #0984e3);
+    color: white;
+}
+
+.feedback-details {
+    display: grid;
+    gap: 20px;
+}
+
+.feedback-item {
+    background: rgba(255,255,255,0.05);
+    padding: 20px;
+    border-radius: 12px;
+    border-left: 4px solid;
+}
+
+.feedback-item.strengths {
+    border-left-color: #28a745;
+}
+
+.feedback-item.improvements {
+    border-left-color: #ffc107;
+}
+
+.feedback-item.missing {
+    border-left-color: #dc3545;
+}
+
+.feedback-item.general {
+    border-left-color: #74b9ff;
+}
+
+.feedback-item h5 {
+    margin: 0 0 10px 0;
+    color: #e0e6ed;
+    font-size: 1.1rem;
+}
+
+.feedback-item p {
+    margin: 0;
+    color: #cbd5e0;
+    line-height: 1.5;
+}
+
+.action-buttons {
+    text-align: center;
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+#loading-message {
+    background: rgba(255,255,255,0.05);
+    border-radius: 12px;
+    color: #74b9ff;
+    font-size: 1.1rem;
+}
+
+#recording-status {
+    margin-bottom: 15px;
+    font-size: 1rem;
+    color: #a8c4ff;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .card {
+        padding: 20px;
+        margin-bottom: 15px;
+    }
+    
+    .score-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .recording-btn {
+        padding: 12px 20px;
+        font-size: 0.9rem;
+        margin: 5px;
+    }
+    
+    .floating {
+        float: none;
+        display: block;
+        margin-top: 15px;
+    }
+}
+</style>
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>{{ topic }} Interview</h2>
+        <div class="question-progress">
+            Question {{ current_index|add:1 }} of {{ total_questions }}
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>{{ current_question.question }}</h3>
+        <a href="{% url 'save_question' current_question.id %}" class="btn btn-warning floating" style="margin-top: 15px;">
+            <i class="fas fa-star"></i> Save Question
+        </a>
+    </div>
+
+    <div class="card">
+        <h4>Your Answer</h4>
+        
+        <div id="recording-controls" class="recording-controls">
+            <div id="recording-status"></div>
+            <button id="start-recording" class="btn btn-success recording-btn">
+                <i class="fas fa-microphone"></i> Start Recording
+            </button>
+            <button id="stop-recording" class="btn btn-danger recording-btn recording-pulse" style="display: none;">
+                <i class="fas fa-stop"></i> Stop Recording
+            </button>
+        </div>
+
+        <div id="loading-message" style="display: none; text-align: center; padding: 20px;">
+            <p>Processing your answer... Please wait.</p>
+        </div>
+
+        <div id="feedback-section" class="feedback-section" style="display: none;">
+            <h4>📊 Detailed Feedback</h4>
+            
+            <div class="score-grid">
+                <div class="score-item">
+                    <strong>Overall Accuracy:</strong> <span id="accuracy" class="score-badge"></span>
+                </div>
+                <div class="score-item">
+                    <strong>Clarity:</strong> <span id="clarity-score" class="score-badge"></span>
+                </div>
+                <div class="score-item">
+                    <strong>Completeness:</strong> <span id="completeness-score" class="score-badge"></span>
+                </div>
+                <div class="score-item">
+                    <strong>Technical Accuracy:</strong> <span id="technical-score" class="score-badge"></span>
+                </div>
+            </div>
+            
+            <div class="feedback-details">
+                <div class="feedback-item strengths">
+                    <h5>✅ Strengths</h5>
+                    <p id="strengths-text"></p>
+                </div>
+                
+                <div class="feedback-item improvements">
+                    <h5>🔧 Areas for Improvement</h5>
+                    <p id="improvements-text"></p>
+                </div>
+                
+                <div class="feedback-item missing">
+                    <h5>❗ Missing Key Points</h5>
+                    <p id="missing-points-text"></p>
+                </div>
+                
+                <div class="feedback-item general">
+                    <h5>💬 General Feedback</h5>
+                    <p id="feedback-text"></p>
+                </div>
+            </div>
+            
+            <div class="action-buttons">
+                {% if next_index < total_questions %}
+                    <a href="{% url 'interview' topic %}?q={{ next_index }}" id="next-question" class="btn btn-primary" style="display: none;">
+                        Next Question →
+                    </a>
+                {% else %}
+                    <a href="{% url 'dashboard' %}" id="next-question" class="btn btn-success" style="display: none;">
+                        🎉 Complete Interview
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<input type="hidden" id="question-id" value="{{ current_question.id }}">
+{% csrf_token %}
+
+<script>
+let mediaRecorder;
+let audioChunks = [];
+let isRecording = false;
+
+document.addEventListener('DOMContentLoaded', function() {
+    const startBtn = document.getElementById('start-recording');
+    const stopBtn = document.getElementById('stop-recording');
+    const status = document.getElementById('recording-status');
+    const loadingMessage = document.getElementById('loading-message');
+    const feedbackSection = document.getElementById('feedback-section');
+    const nextButton = document.getElementById('next-question');
+    
+    startBtn.addEventListener('click', startRecording);
+    stopBtn.addEventListener('click', stopRecording);
+    
+    async function startRecording() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            
+            mediaRecorder.ondataavailable = event => {
+                audioChunks.push(event.data);
+            };
+            
+            mediaRecorder.onstop = submitAnswer;
+            
+            mediaRecorder.start();
+            isRecording = true;
+            
+            startBtn.style.display = 'none';
+            stopBtn.style.display = 'inline-flex';
+            status.textContent = '🔴 Recording... Speak your answer clearly';
+            status.style.color = '#dc3545';
+            
+        } catch (error) {
+            console.error('Error accessing microphone:', error);
+            status.textContent = '❌ Microphone access denied. Please allow microphone access and try again.';
+            status.style.color = '#dc3545';
+        }
+    }
+    
+    function stopRecording() {
+        if (mediaRecorder && isRecording) {
+            mediaRecorder.stop();
+            mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            isRecording = false;
+            
+            stopBtn.style.display = 'none';
+            status.textContent = '⏹️ Recording stopped. Processing...';
+            status.style.color = '#ffc107';
+        }
+    }
+    
+    async function submitAnswer() {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+        const formData = new FormData();
+        
+        formData.append('audio_file', audioBlob, 'answer.wav');
+        formData.append('question_id', document.getElementById('question-id').value);
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+        
+        // Show loading message
+        document.getElementById('recording-controls').style.display = 'none';
+        loadingMessage.style.display = 'block';
+        
+        try {
+            const response = await fetch('/submit-answer/', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.success !== false) {
+                displayFeedback(result);
+            } else {
+                throw new Error(result.error || 'Failed to process answer');
+            }
+            
+        } catch (error) {
+            console.error('Error submitting answer:', error);
+            status.textContent = '❌ Error processing answer. Please try again.';
+            status.style.color = '#dc3545';
+            
+            // Reset recording controls
+            document.getElementById('recording-controls').style.display = 'block';
+            loadingMessage.style.display = 'none';
+            startBtn.style.display = 'inline-flex';
+        }
+    }
+    
+    function displayFeedback(data) {
+        // Hide loading message
+        loadingMessage.style.display = 'none';
+        
+        // Populate feedback data
+        document.getElementById('accuracy').textContent = data.accuracy + '%';
+        document.getElementById('clarity-score').textContent = data.clarity_score + '%';
+        document.getElementById('completeness-score').textContent = data.completeness_score + '%';
+        document.getElementById('technical-score').textContent = data.technical_accuracy_score + '%';
+        
+        document.getElementById('strengths-text').textContent = data.strengths || 'None identified';
+        document.getElementById('improvements-text').textContent = data.improvements || 'None suggested';
+        document.getElementById('missing-points-text').textContent = data.missing_points || 'None identified';
+        document.getElementById('feedback-text').textContent = data.feedback || 'No feedback available';
+        
+        // Show feedback section and next button
+        feedbackSection.style.display = 'block';
+        nextButton.style.display = 'inline-block';
+        
+        // Scroll to feedback
+        feedbackSection.scrollIntoView({ behavior: 'smooth' });
+    }
+});
+</script>
+{% endblock %}

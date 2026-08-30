@@ -24,13 +24,18 @@ class InterviewQuestion(models.Model):
 class UserAnswer(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="answers")
     question = models.ForeignKey(InterviewQuestion, on_delete=models.CASCADE, related_name="user_answers")
-    audio_file = models.FileField(
-        upload_to="answers/%Y/%m/%d/",
-        validators=[FileExtensionValidator(allowed_extensions=['mp3', 'wav', 'm4a', 'ogg'])]
-    )
-    user_text = models.TextField(null=True, blank=True)
+    user_text = models.TextField()
     accuracy = models.FloatField(null=True, blank=True)
     feedback = models.TextField(null=True, blank=True)
+    
+    # Enhanced feedback fields
+    strengths = models.TextField(null=True, blank=True)
+    improvements = models.TextField(null=True, blank=True)
+    missing_points = models.TextField(null=True, blank=True)
+    clarity_score = models.FloatField(null=True, blank=True)
+    completeness_score = models.FloatField(null=True, blank=True)
+    technical_accuracy_score = models.FloatField(null=True, blank=True)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -58,3 +63,17 @@ class SavedQuestion(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.question.question[:50]}"
+
+class Resume(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="resumes")
+    extracted_text = models.TextField(blank=True)
+    skills = models.JSONField(default=list, blank=True)
+    experience = models.JSONField(default=list, blank=True)
+    projects = models.JSONField(default=list, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-uploaded_at']
+    
+    def __str__(self):
+        return f"{self.user.username} - Resume ({self.uploaded_at.date()})"

@@ -9,6 +9,7 @@ from django.contrib.auth.models import User
 from .models import InterviewQuestion, UserAnswer, SavedQuestion
 from .serializers import RegisterSerializer, InterviewQuestionSerializer, UserAnswerSerializer, UserSerializer, SavedQuestionSerializer
 from .services import InterviewService
+from .pagination import StandardResultsSetPagination
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +27,12 @@ class RegisterView(generics.CreateAPIView):
 # --------------------
 
 class InterviewQuestionListView(generics.ListAPIView):
-    queryset = InterviewQuestion.objects.all()
     serializer_class = InterviewQuestionSerializer
+    pagination_class = StandardResultsSetPagination
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        return InterviewQuestion.objects.filter(user=self.request.user).order_by('-created_at')
 
 
 
@@ -35,12 +40,38 @@ class GenerateQuestionsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, topic):
+        count = int(request.GET.get('count', 4))
+        difficulty = request.GET.get('difficulty', 'medium')
+        
         try:
             interview_service = InterviewService()
-            created_questions = interview_service.create_questions(request.user, topic)
+            created_questions = interview_service.create_questions(request.user, topic, count, difficulty)
             
             serializer = InterviewQuestionSerializer(created_questions, many=True)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        except Exception as e:
+            logger.error(f"Failed to generate questions for topic {topic}: {str(e)}")
+            return Response(
+                {"error": "Failed to generate questions. Please try again later."}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def post(self, request):
+        topic = request.data.get('topic')
+        count = int(request.data.get('count', 4))
+        difficulty = request.data.get('difficulty', 'medium')
+        
+        if not topic:
+            return Response({"error": "Topic is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            interview_service = InterviewService()
+            created_questions = interview_service.create_questions(request.user, topic, count, difficulty)
+            
+            # Redirect to interview page
+            from django.shortcuts import redirect
+            return redirect('interview', topic=topic)
         
         except Exception as e:
             logger.error(f"Failed to generate questions for topic {topic}: {str(e)}")
@@ -131,6 +162,7 @@ class SaveQuestionView(generics.CreateAPIView):
 class ListSavedQuestionsView(generics.ListAPIView):
     serializer_class = SavedQuestionSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         return SavedQuestion.objects.filter(user=self.request.user)
