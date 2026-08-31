@@ -8,12 +8,7 @@ from .models import InterviewQuestion, UserAnswer
 
 logger = logging.getLogger(__name__)
 
-try:
-    from transformers import pipeline
-    import librosa
-    TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    TRANSFORMERS_AVAILABLE = False
+
 
 
 class AIService:
@@ -210,65 +205,48 @@ IMPORTANT:
 
 
 class AudioService:
-    """Service for handling audio processing"""
+    """Service for handling audio processing using Groq API"""
     
     def __init__(self):
-        self.transcriber = None
-        self._model_loaded = False
-    
-    def _load_model(self):
-        """Lazy load Whisper model only when needed"""
-        if self._model_loaded or not TRANSFORMERS_AVAILABLE:
-            return
-        
-        try:
-            import gc
-            self.transcriber = pipeline(
-                "automatic-speech-recognition",
-                model="openai/whisper-tiny",
-                device=-1  # Use CPU
-            )
-            self._model_loaded = True
-            gc.collect()  # Clean up memory after loading
-        except Exception as e:
-            logger.error("Failed to load Whisper model: %s", str(e))
-            self.transcriber = None
+        self.api_key = os.getenv('GROQ_API_KEY')
+        if not self.api_key:
+            logger.error("GROQ_API_KEY not found in environment variables")
+        self.base_url = "https://api.groq.com/openai/v1/audio/transcriptions"
+        self.model = "whisper-large-v3-turbo"
     
     def transcribe_audio(self, audio_file):
-        """Transcribe audio file to text using Hugging Face Whisper"""
-        # Lazy load model only when transcription is needed
-        self._load_model()
-        
-        if not self.transcriber:
+        """Transcribe audio file to text using Groq API"""
+        if not self.api_key:
+            logger.warning("Transcription skipped: GROQ_API_KEY is missing.")
             return "Audio transcription unavailable. Please type your answer."
         
         try:
-            import tempfile
-            import gc
+            headers = {
+                "Authorization": f"Bearer {self.api_key}"
+            }
             
-            # Save audio to temporary file
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
-                for chunk in audio_file.chunks():
-                    temp_file.write(chunk)
-                temp_path = temp_file.name
+            # Prepare file for multipart/form-data upload
+            files = {
+                'file': (audio_file.name, audio_file.read(), audio_file.content_type)
+            }
+            data = {
+                'model': self.model,
+                'response_format': 'json'
+            }
             
-            # Load audio with librosa
-            audio_data, sample_rate = librosa.load(temp_path, sr=16000)
+            response = requests.post(self.base_url, headers=headers, files=files, data=data, timeout=30)
             
-            # Transcribe using Hugging Face pipeline
-            result = self.transcriber(audio_data)
-            transcribed_text = result['text']
+            if response.status_code != 200:
+                logger.error("Groq API error: %s", response.text)
+                return "Transcription failed: API error. Please type your answer."
+                
+            result = response.json()
+            return result.get('text', '')
             
-            # Clean up temp file and memory
-            os.unlink(temp_path)
-            del audio_data
-            gc.collect()
-            
-            return transcribed_text
-            
+        except requests.exceptions.RequestException as e:
+            logger.error("Network error during transcription: %s", str(e))
+            return "Transcription failed: Network error. Please type your answer."
         except Exception as e:
-            import gc
-            gc.collect()
             logger.error("Transcription failed: %s", str(e))
             return "Transcription failed: Please type your answer."
 
