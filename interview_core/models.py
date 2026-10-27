@@ -4,6 +4,13 @@ from django.core.validators import FileExtensionValidator
 
 class InterviewQuestion(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="questions")
+    role_session = models.ForeignKey(
+        'RoleInterviewSession',
+        on_delete=models.SET_NULL,
+        related_name='questions',
+        null=True,
+        blank=True,
+    )
     topic = models.CharField(max_length=100, db_index=True)
     question = models.TextField()
     answer = models.TextField()
@@ -20,6 +27,30 @@ class InterviewQuestion(models.Model):
     
     def __str__(self):
         return f"{self.topic}: {self.question[:50]}"
+
+
+class RoleInterviewSession(models.Model):
+    """The target role and constraints used for one role-based interview."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='role_interviews')
+    role = models.CharField(max_length=100)
+    role_slug = models.CharField(max_length=64)
+    experience_level = models.CharField(max_length=20)
+    focus_area = models.CharField(max_length=64, blank=True)
+    job_description = models.TextField(blank=True)
+    difficulty = models.CharField(max_length=10, default='medium')
+    question_count = models.PositiveSmallIntegerField(default=4)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'created_at']),
+            models.Index(fields=['user', 'role_slug']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.role} ({self.experience_level})"
 
 class UserAnswer(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="answers")
