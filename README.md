@@ -40,6 +40,9 @@ python manage.py runserver
 DJANGO_ENVIRONMENT=development
 SECRET_KEY=your-secret-key
 OPENROUTER_API_KEY=your-openrouter-api-key
+GOOGLE_TTS_ENABLED=true
+# Configure either a credential-file path or service-account JSON in your host's secret store.
+GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/service-account.json
 ALLOWED_HOSTS=localhost,127.0.0.1
 DATABASE_URL=postgresql://... (for production)
 ```
@@ -62,6 +65,10 @@ DATABASE_URL=postgresql://... (for production)
 - Automatic transcription using Whisper-tiny model
 - Get detailed feedback on your answers
 - Scoring based on accuracy, clarity, and completeness
+
+### **Question narration (Google Neural2)**
+
+Interview questions use Google Cloud Text-to-Speech's Neural2 voice when it is configured. Enable the Cloud Text-to-Speech API, create a service account with the **Cloud Text-to-Speech User** role, and set `GOOGLE_APPLICATION_CREDENTIALS` to its JSON credential path. On platforms that only support text secrets, set `GOOGLE_APPLICATION_CREDENTIALS_JSON` to the complete JSON key instead. `GOOGLE_TTS_VOICE` defaults to `en-IN-Neural2-A`; set it to any compatible Neural2 voice to change the narrator. If the service, credentials, or network are unavailable, the app automatically uses the browser's native speech voice.
 
 ## 🌐 Deploy on Render
 

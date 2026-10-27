@@ -2,17 +2,86 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, authenticate, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
+from django.conf import settings
+from django.core.cache import cache
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_http_methods, require_POST
 from django.db import models
 from .models import InterviewQuestion, UserAnswer, SavedQuestion
 from .services import InterviewService
 from .serializers import RegisterSerializer
 import json
 import logging
+from hashlib import sha256
 
 logger = logging.getLogger(__name__)
+
+
+@login_required
+@require_POST
+def synthesize_speech_view(request):
+    """Return Google Neural2 speech for a short interview prompt.
+
+    The endpoint deliberately keeps Google credentials server-side. A 503 is
+    returned for configuration/provider errors so the client can immediately
+    fall back to the browser's native speech synthesis.
+    """
+    if not settings.GOOGLE_TTS_ENABLED:
+        return JsonResponse({'error': 'Cloud text-to-speech is disabled.'}, status=503)
+
+    try:
+        payload = json.loads(request.body)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+
+    if not isinstance(payload, dict):
+        return JsonResponse({'error': 'Request body must be a JSON object.'}, status=400)
+
+    text = payload.get('text', '')
+    if not isinstance(text, str) or not text.strip():
+        return JsonResponse({'error': 'Text is required.'}, status=400)
+    if len(text) > 5_000:
+        return JsonResponse({'error': 'Text must be 5,000 characters or fewer.'}, status=400)
+
+    text = text.strip()
+    cache_hash = sha256(
+        f'{settings.GOOGLE_TTS_VOICE}:{settings.GOOGLE_TTS_LANGUAGE_CODE}:{text}'.encode()
+    ).hexdigest()
+    cache_key = f'neural2_audio:{cache_hash}'
+    audio_content = cache.get(cache_key)
+
+    if audio_content is None:
+        try:
+            from google.cloud import texttospeech
+            from google.oauth2 import service_account
+
+            credentials = None
+            if settings.GOOGLE_APPLICATION_CREDENTIALS_JSON:
+                credentials = service_account.Credentials.from_service_account_info(
+                    json.loads(settings.GOOGLE_APPLICATION_CREDENTIALS_JSON)
+                )
+
+            client = texttospeech.TextToSpeechClient(credentials=credentials)
+            response = client.synthesize_speech(
+                input=texttospeech.SynthesisInput(text=text),
+                voice=texttospeech.VoiceSelectionParams(
+                    language_code=settings.GOOGLE_TTS_LANGUAGE_CODE,
+                    name=settings.GOOGLE_TTS_VOICE,
+                ),
+                audio_config=texttospeech.AudioConfig(
+                    audio_encoding=texttospeech.AudioEncoding.MP3,
+                ),
+            )
+            audio_content = response.audio_content
+            cache.set(cache_key, audio_content, timeout=60 * 60)
+        except Exception:
+            logger.exception('Google Cloud Text-to-Speech synthesis failed')
+            return JsonResponse({'error': 'Cloud text-to-speech is unavailable.'}, status=503)
+
+    response = HttpResponse(audio_content, content_type='audio/mpeg')
+    response['Cache-Control'] = 'private, max-age=3600'
+    return response
 
 def login_view(request):
     if request.user.is_authenticated:
