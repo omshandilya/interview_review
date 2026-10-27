@@ -252,10 +252,23 @@
     </div>
 
     <div class="card">
-        <h3>{{ current_question.question }}</h3>
-        <a href="{% url 'save_question' current_question.id %}" class="btn btn-warning floating" style="margin-top: 15px;">
-            <i class="fas fa-star"></i> Save Question
-        </a>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+            <h3 id="question-text">{{ current_question.question }}</h3>
+            <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-top: 4px;">
+                <a href="{% url 'save_question' current_question.id %}" class="btn btn-warning floating" style="margin-top: 0;">
+                    <i class="fas fa-star"></i> Save Question
+                </a>
+                <button id="tts-mute-btn"
+                        title="Toggle question audio"
+                        style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+                               color: #e0e6ed; padding: 8px 14px; border-radius: 8px; cursor: pointer;
+                               font-size: 0.85rem; font-weight: 600; transition: all 0.25s ease;
+                               display: flex; align-items: center; gap: 6px;">
+                    <i class="fas fa-volume-up" id="tts-mute-icon"></i>
+                    <span id="tts-mute-label">Mute</span>
+                </button>
+            </div>
+        </div>
     </div>
 
     <div class="card">
@@ -334,118 +347,140 @@
 {% csrf_token %}
 
 <script>
-let mediaRecorder;
-let audioChunks = [];
-let isRecording = false;
+document.addEventListener('DOMContentLoaded', function () {
+    const startBtn    = document.getElementById('start-recording');
+    const stopBtn     = document.getElementById('stop-recording');
+    const status      = document.getElementById('recording-status');
+    const muteBtn     = document.getElementById('tts-mute-btn');
+    const muteIcon    = document.getElementById('tts-mute-icon');
+    const muteLabel   = document.getElementById('tts-mute-label');
 
-document.addEventListener('DOMContentLoaded', function() {
-    const startBtn = document.getElementById('start-recording');
-    const stopBtn = document.getElementById('stop-recording');
-    const status = document.getElementById('recording-status');
-    const loadingMessage = document.getElementById('loading-message');
-    const feedbackSection = document.getElementById('feedback-section');
-    const nextButton = document.getElementById('next-question');
-    
+    // ── Sync mute button appearance with current TTS state ──────────────────
+    function syncMuteButton() {
+        const muted = window.tts && window.tts.isMuted;
+        muteIcon.className  = muted ? 'fas fa-volume-mute' : 'fas fa-volume-up';
+        muteLabel.textContent = muted ? 'Unmute' : 'Mute';
+        muteBtn.style.color = muted ? '#e17055' : '#e0e6ed';
+        muteBtn.style.borderColor = muted ? 'rgba(225,112,85,0.4)' : 'rgba(255,255,255,0.2)';
+    }
+
+    // Initialise button to match persisted mute state (survives page navigation)
+    syncMuteButton();
+
+    // ── Mute toggle ──────────────────────────────────────────────────────────
+    muteBtn.addEventListener('click', function () {
+        if (window.tts) {
+            window.tts.toggleMute();
+        }
+        syncMuteButton();
+    });
+
+    // ── Speak question on page load ──────────────────────────────────────────
+    // Disable the microphone button while the question is being read aloud
+    // so the user doesn't accidentally start recording mid-sentence.
+    const questionText = document.getElementById('question-text')?.innerText;
+
+    if (window.tts) {
+        startBtn.disabled = true;
+        startBtn.title    = 'Waiting for question to finish…';
+
+        window.tts.speak(questionText, {
+            onEnd: function () {
+                startBtn.disabled = false;
+                startBtn.title    = '';
+            },
+            onError: function (err) {
+                console.warn('[Interview] TTS error, enabling mic anyway:', err);
+                startBtn.disabled = false;
+                startBtn.title    = '';
+            }
+        });
+    }
+
+    // ── Recording controls ───────────────────────────────────────────────────
     startBtn.addEventListener('click', startRecording);
     stopBtn.addEventListener('click', stopRecording);
-    
+
     async function startRecording() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream);
-            audioChunks = [];
-            
-            mediaRecorder.ondataavailable = event => {
-                audioChunks.push(event.data);
-            };
-            
-            mediaRecorder.onstop = submitAnswer;
-            
-            mediaRecorder.start();
-            isRecording = true;
-            
+            window._mediaRecorder = new MediaRecorder(stream);
+            window._audioChunks   = [];
+
+            window._mediaRecorder.ondataavailable = (e) => window._audioChunks.push(e.data);
+            window._mediaRecorder.onstop = submitAnswer;
+            window._mediaRecorder.start();
+
             startBtn.style.display = 'none';
-            stopBtn.style.display = 'inline-flex';
-            status.textContent = '🔴 Recording... Speak your answer clearly';
-            status.style.color = '#dc3545';
-            
-        } catch (error) {
-            console.error('Error accessing microphone:', error);
+            stopBtn.style.display  = 'inline-flex';
+            status.textContent     = '🔴 Recording… Speak your answer clearly';
+            status.style.color     = '#dc3545';
+        } catch (err) {
+            console.error('Microphone error:', err);
             status.textContent = '❌ Microphone access denied. Please allow microphone access and try again.';
             status.style.color = '#dc3545';
         }
     }
-    
+
     function stopRecording() {
-        if (mediaRecorder && isRecording) {
-            mediaRecorder.stop();
-            mediaRecorder.stream.getTracks().forEach(track => track.stop());
-            isRecording = false;
-            
+        if (window._mediaRecorder && window._mediaRecorder.state !== 'inactive') {
+            window._mediaRecorder.stop();
+            window._mediaRecorder.stream.getTracks().forEach(t => t.stop());
+
             stopBtn.style.display = 'none';
-            status.textContent = '⏹️ Recording stopped. Processing...';
-            status.style.color = '#ffc107';
+            status.textContent    = '⏹️ Recording stopped. Processing…';
+            status.style.color    = '#ffc107';
         }
     }
-    
+
     async function submitAnswer() {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-        const formData = new FormData();
-        
-        formData.append('audio_file', audioBlob, 'answer.wav');
-        formData.append('question_id', document.getElementById('question-id').value);
+        const audioBlob = new Blob(window._audioChunks, { type: 'audio/wav' });
+        const formData  = new FormData();
+        formData.append('audio_file',        audioBlob, 'answer.wav');
+        formData.append('question_id',       document.getElementById('question-id').value);
         formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
-        
-        // Show loading message
+
         document.getElementById('recording-controls').style.display = 'none';
-        loadingMessage.style.display = 'block';
-        
+        document.getElementById('loading-message').style.display    = 'block';
+
         try {
-            const response = await fetch('/submit-answer/', {
-                method: 'POST',
-                body: formData
-            });
-            
-            const result = await response.json();
-            
+            const response = await fetch('/submit-answer/', { method: 'POST', body: formData });
+            const result   = await response.json();
+
             if (result.success !== false) {
                 displayFeedback(result);
             } else {
                 throw new Error(result.error || 'Failed to process answer');
             }
-            
-        } catch (error) {
-            console.error('Error submitting answer:', error);
+        } catch (err) {
+            console.error('Submit error:', err);
             status.textContent = '❌ Error processing answer. Please try again.';
             status.style.color = '#dc3545';
-            
-            // Reset recording controls
             document.getElementById('recording-controls').style.display = 'block';
-            loadingMessage.style.display = 'none';
+            document.getElementById('loading-message').style.display    = 'none';
             startBtn.style.display = 'inline-flex';
         }
     }
-    
+
     function displayFeedback(data) {
-        // Hide loading message
-        loadingMessage.style.display = 'none';
-        
-        // Populate feedback data
-        document.getElementById('accuracy').textContent = data.accuracy + '%';
-        document.getElementById('clarity-score').textContent = data.clarity_score + '%';
-        document.getElementById('completeness-score').textContent = data.completeness_score + '%';
-        document.getElementById('technical-score').textContent = data.technical_accuracy_score + '%';
-        
-        document.getElementById('strengths-text').textContent = data.strengths || 'None identified';
-        document.getElementById('improvements-text').textContent = data.improvements || 'None suggested';
-        document.getElementById('missing-points-text').textContent = data.missing_points || 'None identified';
-        document.getElementById('feedback-text').textContent = data.feedback || 'No feedback available';
-        
-        // Show feedback section and next button
+        const feedbackSection = document.getElementById('feedback-section');
+        const nextButton      = document.getElementById('next-question');
+
+        document.getElementById('loading-message').style.display = 'none';
+
+        document.getElementById('accuracy').textContent             = data.accuracy + '%';
+        document.getElementById('clarity-score').textContent        = data.clarity_score + '%';
+        document.getElementById('completeness-score').textContent   = data.completeness_score + '%';
+        document.getElementById('technical-score').textContent      = data.technical_accuracy_score + '%';
+
+        document.getElementById('strengths-text').textContent       = data.strengths      || 'None identified';
+        document.getElementById('improvements-text').textContent    = data.improvements   || 'None suggested';
+        document.getElementById('missing-points-text').textContent  = data.missing_points || 'None identified';
+        document.getElementById('feedback-text').textContent        = data.feedback       || 'No feedback available';
+
         feedbackSection.style.display = 'block';
-        nextButton.style.display = 'inline-block';
-        
-        // Scroll to feedback
+        nextButton.style.display      = 'inline-block';
+
         feedbackSection.scrollIntoView({ behavior: 'smooth' });
     }
 });

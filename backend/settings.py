@@ -219,6 +219,16 @@ CACHES = {
     }
 }
 
+# -------- Google Cloud Text-to-Speech --------
+# Credentials are supplied through Application Default Credentials, normally
+# GOOGLE_APPLICATION_CREDENTIALS (a path to a service-account JSON file). For
+# hosts such as Render, GOOGLE_APPLICATION_CREDENTIALS_JSON may instead contain
+# the complete JSON service-account key.
+GOOGLE_TTS_ENABLED = os.getenv('GOOGLE_TTS_ENABLED', 'true').lower() == 'true'
+GOOGLE_TTS_VOICE = os.getenv('GOOGLE_TTS_VOICE', 'en-IN-Neural2-A')
+GOOGLE_TTS_LANGUAGE_CODE = os.getenv('GOOGLE_TTS_LANGUAGE_CODE', 'en-IN')
+GOOGLE_APPLICATION_CREDENTIALS_JSON = os.getenv('GOOGLE_APPLICATION_CREDENTIALS_JSON', '')
+
 # -------- Logging --------
 LOG_DIR = BASE_DIR / 'logs'
 LOG_DIR.mkdir(exist_ok=True)
