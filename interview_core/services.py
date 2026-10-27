@@ -19,7 +19,7 @@ class AIService:
         if not self.api_key:
             raise ValueError("OPENROUTER_API_KEY environment variable is required")
         self.base_url = "https://openrouter.ai/api/v1/chat/completions"
-        self.model = "openai/gpt-3.5-turbo"
+        self.model = "openrouter/free"
     
     def generate_questions(self, topic, count=4, difficulty="medium"):
         """Generate interview questions for a given topic with specified difficulty"""
