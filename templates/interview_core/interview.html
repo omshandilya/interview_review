@@ -330,7 +330,7 @@
             
             <div class="action-buttons">
                 {% if next_index < total_questions %}
-                    <a href="{% url 'interview' topic %}?q={{ next_index }}" id="next-question" class="btn btn-primary" style="display: none;">
+                    <a href="{{ next_url }}" id="next-question" class="btn btn-primary" style="display: none;">
                         Next Question →
                     </a>
                 {% else %}

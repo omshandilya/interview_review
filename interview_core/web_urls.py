@@ -3,7 +3,8 @@ from .template_views import (
     login_view, register_view, logout_view, dashboard_view,
     generate_questions_view, interview_view, submit_answer_view,
     save_question_view, saved_questions_view, profile_view, upload_resume_view,
-    resume_interview_view, synthesize_speech_view
+    resume_interview_view, synthesize_speech_view, role_interview_view,
+    generate_role_interview_view, role_interview_session_view
 )
 
 urlpatterns = [
@@ -19,5 +20,8 @@ urlpatterns = [
     path('profile/', profile_view, name='profile'),
     path('resume-interview/', resume_interview_view, name='resume_interview'),
     path('upload-resume/', upload_resume_view, name='upload_resume'),
+    path('role-interview/', role_interview_view, name='role_interview'),
+    path('role-interview/generate/', generate_role_interview_view, name='generate_role_interview'),
+    path('role-interview/session/<int:session_id>/', role_interview_session_view, name='role_interview_session'),
     path('tts/synthesize/', synthesize_speech_view, name='synthesize_speech'),
 ]
