@@ -94,8 +94,21 @@
         </div>
     </div>
     
-    <!-- Resume Interview Button -->
-    <div class="resume-interview-section">
+    <!-- Guided interview modes -->
+    <div class="guided-interview-options">
+        <a href="{% url 'role_interview' %}" class="role-interview-btn">
+            <div class="btn-icon">
+                <i class="fas fa-briefcase"></i>
+            </div>
+            <div class="btn-content">
+                <h3>Role-Based Interview</h3>
+                <p>Practice questions tailored to a role, your experience, and an optional job description</p>
+            </div>
+            <div class="btn-arrow">
+                <i class="fas fa-arrow-right"></i>
+            </div>
+        </a>
+
         <a href="{% url 'resume_interview' %}" class="resume-interview-btn">
             <div class="btn-icon">
                 <i class="fas fa-file-alt"></i>
@@ -390,13 +403,16 @@ select option {
     margin: 0 auto 40px auto;
 }
 
-/* Resume Interview Section */
-.resume-interview-section {
+/* Guided Interview Modes */
+.guided-interview-options {
     max-width: 800px;
-    margin: 0 auto 30px auto;
+    margin: 0 auto 30px;
+    display: grid;
+    gap: 20px;
 }
 
-.resume-interview-btn {
+.resume-interview-btn,
+.role-interview-btn {
     display: flex;
     align-items: center;
     background: linear-gradient(135deg, #ffc107 0%, #ff8f00 100%);
@@ -410,7 +426,8 @@ select option {
     overflow: hidden;
 }
 
-.resume-interview-btn::before {
+.resume-interview-btn::before,
+.role-interview-btn::before {
     content: '';
     position: absolute;
     top: 0;
@@ -421,13 +438,25 @@ select option {
     transition: left 0.5s;
 }
 
-.resume-interview-btn:hover::before {
+.resume-interview-btn:hover::before,
+.role-interview-btn:hover::before {
     left: 100%;
 }
 
-.resume-interview-btn:hover {
+.resume-interview-btn:hover,
+.role-interview-btn:hover {
     transform: translateY(-5px);
     box-shadow: 0 15px 35px rgba(255,193,7,0.4);
+}
+
+.role-interview-btn {
+    background: linear-gradient(135deg, #7c3aed 0%, #2563eb 100%);
+    color: #fff;
+    box-shadow: 0 8px 25px rgba(99,102,241,0.32);
+}
+
+.role-interview-btn:hover {
+    box-shadow: 0 15px 35px rgba(99,102,241,0.42);
 }
 
 .btn-icon {
@@ -463,7 +492,8 @@ select option {
     transition: transform 0.3s ease;
 }
 
-.resume-interview-btn:hover .btn-arrow {
+.resume-interview-btn:hover .btn-arrow,
+.role-interview-btn:hover .btn-arrow {
     transform: translateX(5px);
 }
 

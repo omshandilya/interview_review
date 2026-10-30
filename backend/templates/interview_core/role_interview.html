@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+
+{% block title %}Role-Based Interview - Interview Review{% endblock %}
+
+{% block content %}
+<div class="role-interview-container">
+    <div class="role-header">
+        <a href="{% url 'dashboard' %}" class="back-link"><i class="fas fa-arrow-left"></i> Back to dashboard</a>
+        <div class="role-header-icon"><i class="fas fa-briefcase"></i></div>
+        <h1>Role-Based Interview</h1>
+        <p>Build a practice interview around the job you want, not just a generic topic.</p>
+    </div>
+
+    <form method="post" action="{% url 'generate_role_interview' %}" class="role-form" id="role-interview-form">
+        {% csrf_token %}
+        <section class="form-section">
+            <div class="section-heading"><span>1</span><div><h2>Target role</h2><p>Choose the position you are preparing for.</p></div></div>
+            <label for="role">Role</label>
+            <select id="role" name="role" required>
+                <option value="" selected disabled>Select a role</option>
+                {% for value, label in role_options %}
+                    <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+                <option value="custom">Other role</option>
+            </select>
+            <div class="custom-role" id="custom-role-wrap" hidden>
+                <label for="custom_role">Your role</label>
+                <input type="text" id="custom_role" name="custom_role" minlength="2" maxlength="100" placeholder="For example, Solutions Architect">
+            </div>
+        </section>
+
+        <section class="form-section">
+            <div class="section-heading"><span>2</span><div><h2>Interview details</h2><p>Set the level and type of questions you want to practise.</p></div></div>
+            <div class="form-grid">
+                <div>
+                    <label for="experience_level">Experience level</label>
+                    <select id="experience_level" name="experience_level" required>
+                        <option value="" selected disabled>Select your experience</option>
+                        {% for value, label in experience_levels %}
+                            <option value="{{ value }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="focus_area">Focus</label>
+                    <select id="focus_area" name="focus_area">
+                        {% for value, label in focus_areas %}
+                            <option value="{{ value }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="difficulty">Difficulty</label>
+                    <select id="difficulty" name="difficulty">
+                        <option value="easy">Easy</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="hard">Hard</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="count">Number of questions</label>
+                    <select id="count" name="count">
+                        <option value="4" selected>4 questions</option>
+                        <option value="5">5 questions</option>
+                        <option value="6">6 questions</option>
+                        <option value="7">7 questions</option>
+                        <option value="8">8 questions</option>
+                        <option value="9">9 questions</option>
+                        <option value="10">10 questions</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <section class="form-section">
+            <div class="section-heading"><span>3</span><div><h2>Job description <em>Optional</em></h2><p>Paste the job description to make the questions more specific.</p></div></div>
+            <label for="job_description">Job description</label>
+            <textarea id="job_description" name="job_description" maxlength="12000" rows="7" placeholder="Paste the role responsibilities, required skills, and qualifications here."></textarea>
+            <div class="field-note"><span id="character-count">0</span> / 12,000 characters</div>
+        </section>
+
+        <button type="submit" class="start-role-btn"><i class="fas fa-wand-magic-sparkles"></i> Generate my interview <i class="fas fa-arrow-right"></i></button>
+    </form>
+</div>
+
+<style>
+.role-interview-container { max-width: 880px; margin: 0 auto; padding: 22px 0 45px; }
+.role-header { text-align: center; margin: 0 auto 34px; max-width: 620px; }
+.back-link { display: inline-flex; align-items: center; gap: 8px; color: #9fc8ff; text-decoration: none; margin-bottom: 18px; font-weight: 600; }
+.back-link:hover { color: #fff; }
+.role-header-icon { width: 60px; height: 60px; margin: 0 auto 14px; border-radius: 18px; display: grid; place-items: center; color: #fff; font-size: 1.55rem; background: linear-gradient(135deg, #7c3aed, #2563eb); box-shadow: 0 10px 28px rgba(99,102,241,.4); }
+.role-header h1 { font-size: clamp(2rem, 5vw, 2.7rem); margin-bottom: 8px; background: linear-gradient(90deg, #c4b5fd, #60a5fa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.role-header p { color: #b9c7d8; font-size: 1.05rem; }
+.role-form { display: grid; gap: 18px; }
+.form-section { background: linear-gradient(145deg, rgba(22,45,74,.94), rgba(11,27,43,.94)); border: 1px solid rgba(148,163,184,.18); border-radius: 20px; padding: 28px; box-shadow: 0 10px 28px rgba(0,0,0,.18); }
+.section-heading { display: flex; align-items: flex-start; gap: 13px; margin-bottom: 22px; }
+.section-heading > span { display: grid; place-items: center; flex: 0 0 29px; height: 29px; border-radius: 50%; background: rgba(139,92,246,.24); color: #c4b5fd; font-weight: 800; }
+.section-heading h2 { color: #edf3ff; font-size: 1.2rem; margin: 0; }
+.section-heading p { color: #9eafc2; margin: 3px 0 0; font-size: .93rem; }
+.section-heading em { font-style: normal; font-size: .72rem; font-weight: 600; color: #a5b4fc; background: rgba(99,102,241,.18); padding: 3px 7px; border-radius: 999px; margin-left: 5px; vertical-align: middle; }
+.role-form label { display: block; color: #c8d7ef; font-size: .92rem; font-weight: 650; margin: 0 0 8px; }
+.role-form select, .role-form input, .role-form textarea { display: block; width: 100%; color: #f1f5f9; background: rgba(2,12,27,.42); border: 1px solid rgba(148,163,184,.3); border-radius: 11px; padding: 13px 14px; font: inherit; transition: border-color .2s, box-shadow .2s, background .2s; }
+.role-form textarea { resize: vertical; min-height: 128px; line-height: 1.5; }
+.role-form select:focus, .role-form input:focus, .role-form textarea:focus { outline: none; border-color: #8b5cf6; background: rgba(2,12,27,.66); box-shadow: 0 0 0 3px rgba(139,92,246,.18); }
+.role-form select option { background: #172a43; color: #fff; }
+.custom-role { margin-top: 16px; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.field-note { color: #8294aa; font-size: .8rem; text-align: right; margin-top: 7px; }
+.start-role-btn { justify-content: center; display: inline-flex; align-items: center; gap: 10px; width: 100%; border: 0; border-radius: 13px; padding: 16px 22px; cursor: pointer; color: #fff; font-size: 1.03rem; font-weight: 750; background: linear-gradient(90deg, #7c3aed, #2563eb); box-shadow: 0 10px 24px rgba(79,70,229,.35); transition: transform .2s, box-shadow .2s; }
+.start-role-btn:hover { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(79,70,229,.45); }
+@media (max-width: 600px) { .role-interview-container { padding-top: 5px; } .form-section { padding: 21px 18px; } .form-grid { grid-template-columns: 1fr; gap: 15px; } }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const role = document.getElementById('role');
+    const customWrap = document.getElementById('custom-role-wrap');
+    const customRole = document.getElementById('custom_role');
+    const description = document.getElementById('job_description');
+    const characterCount = document.getElementById('character-count');
+
+    const toggleCustomRole = () => {
+        const isCustom = role.value === 'custom';
+        customWrap.hidden = !isCustom;
+        customRole.required = isCustom;
+        if (!isCustom) customRole.value = '';
+    };
+    role.addEventListener('change', toggleCustomRole);
+    description.addEventListener('input', () => { characterCount.textContent = description.value.length.toLocaleString(); });
+});
+</script>
+{% endblock %}

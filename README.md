@@ -39,6 +39,10 @@ python manage.py runserver
 ```env
 DJANGO_ENVIRONMENT=development
 SECRET_KEY=your-secret-key
+GROQ_API_KEY=your-groq-api-key
+# Optional: defaults to openai/gpt-oss-20b
+GROQ_QUESTION_MODEL=openai/gpt-oss-20b
+# Required only for answer evaluation and resume parsing
 OPENROUTER_API_KEY=your-openrouter-api-key
 GOOGLE_TTS_ENABLED=true
 # Configure either a credential-file path or service-account JSON in your host's secret store.
@@ -84,7 +88,7 @@ Interview questions use Google Cloud Text-to-Speech's Neural2 voice when it is c
 
 - **Backend:** Django, Django REST Framework
 - **Database:** SQLite (dev), PostgreSQL (prod)
-- **AI:** OpenRouter API (GPT-3.5-turbo)
+- **AI question generation:** Groq API (GPT-OSS 20B by default)
 - **Audio:** Hugging Face Transformers (Whisper-tiny)
 - **Document Processing:** PyPDF2, python-docx
 - **Frontend:** Django Templates, Vanilla JS
