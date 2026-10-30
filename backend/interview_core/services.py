@@ -202,17 +202,49 @@ IMPORTANT:
             "max_tokens": 2000
         }
         
-        try:
-            response = requests.post(self.base_url, headers=headers, json=payload, timeout=30)
-            
+        # OpenRouter can return a 200 response with an empty completion when a
+        # routed provider fails. Retry that specific transient failure once,
+        # then retain the provider's error detail for the caller and logs.
+        for attempt in range(2):
+            try:
+                response = requests.post(self.base_url, headers=headers, json=payload, timeout=30)
+            except requests.exceptions.RequestException as exc:
+                raise Exception("Failed to connect to AI service") from exc
+
+            try:
+                response_data = response.json()
+            except ValueError as exc:
+                raise Exception("AI service returned an invalid JSON response") from exc
+
+            provider_error = response_data.get('error')
             if response.status_code != 200:
-                raise Exception(f"API request failed with status {response.status_code}")
-            
-            return response.json()['choices'][0]['message']['content']
-        except requests.exceptions.RequestException:
-            raise Exception("Failed to connect to AI service")
-        except (KeyError, IndexError):
-            raise Exception("Invalid response from AI service")
+                detail = provider_error.get('message') if isinstance(provider_error, dict) else None
+                detail = detail or f"status {response.status_code}"
+                raise Exception(f"AI service request failed: {detail}")
+            if isinstance(provider_error, dict):
+                detail = provider_error.get('message') or 'unknown provider error'
+                raise Exception(f"AI service request failed: {detail}")
+
+            try:
+                choice = response_data['choices'][0]
+                content = choice['message'].get('content')
+            except (KeyError, IndexError, TypeError) as exc:
+                raise Exception("AI service returned an invalid completion response") from exc
+
+            if isinstance(content, str) and content.strip():
+                return content
+
+            finish_reason = choice.get('finish_reason') or 'unknown'
+            if attempt == 0:
+                logger.warning(
+                    "AI service returned an empty completion (finish_reason=%s); retrying once.",
+                    finish_reason,
+                )
+                continue
+            raise Exception(
+                "AI service returned an empty completion "
+                f"(finish_reason={finish_reason}). Try again shortly or check the configured model."
+            )
     
     def _parse_json_response(self, raw_content):
         """Parse JSON from API response with better error handling"""
