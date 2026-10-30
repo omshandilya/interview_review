@@ -5,10 +5,18 @@ from django.contrib import messages
 from django.http import JsonResponse, HttpResponse
 from django.conf import settings
 from django.core.cache import cache
+from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 from django.db import models
-from .models import InterviewQuestion, UserAnswer, SavedQuestion
+from .models import InterviewQuestion, RoleInterviewSession, UserAnswer, SavedQuestion
+from .role_catalog import (
+    EXPERIENCE_LEVELS,
+    FOCUS_AREAS,
+    ROLE_OPTIONS,
+    label_for,
+    normalize_custom_role,
+)
 from .services import InterviewService
 from .serializers import RegisterSerializer
 import json
@@ -226,6 +234,7 @@ def interview_view(request, topic):
         'current_index': current_index,
         'total_questions': len(questions),
         'next_index': current_index + 1,
+        'next_url': f"{reverse('interview', args=[topic])}?q={current_index + 1}",
     }
     
     return render(request, 'interview_core/interview.html', context)
@@ -278,6 +287,8 @@ def save_question_view(request, question_id):
     else:
         messages.info(request, 'Question already saved.')
     
+    if question.role_session_id:
+        return redirect('role_interview_session', session_id=question.role_session_id)
     return redirect('interview', topic=question.topic)
 
 @login_required
@@ -417,6 +428,113 @@ def upload_resume_view(request):
 @login_required
 def resume_interview_view(request):
     return render(request, 'interview_core/resume_interview.html')
+
+
+@login_required
+def role_interview_view(request):
+    """Display the configuration form for a role-based interview."""
+    return render(request, 'interview_core/role_interview.html', {
+        'role_options': ROLE_OPTIONS,
+        'experience_levels': EXPERIENCE_LEVELS,
+        'focus_areas': FOCUS_AREAS,
+    })
+
+
+@login_required
+@require_POST
+def generate_role_interview_view(request):
+    """Validate a role interview request, then generate an isolated question set."""
+    role_slug = request.POST.get('role', '').strip()
+    custom_role = request.POST.get('custom_role', '')
+    role = label_for(ROLE_OPTIONS, role_slug)
+
+    if role_slug == 'custom':
+        role, role_slug = normalize_custom_role(custom_role)
+    if not role:
+        messages.error(request, 'Select a role or enter a role between 2 and 100 characters.')
+        return redirect('role_interview')
+
+    experience_level = label_for(EXPERIENCE_LEVELS, request.POST.get('experience_level', ''))
+    focus_area = request.POST.get('focus_area', 'mixed')
+    difficulty = request.POST.get('difficulty', 'medium')
+    if not experience_level:
+        messages.error(request, 'Select an experience level.')
+        return redirect('role_interview')
+    if not label_for(FOCUS_AREAS, focus_area):
+        messages.error(request, 'Select a valid interview focus.')
+        return redirect('role_interview')
+    if difficulty not in {'easy', 'medium', 'hard'}:
+        messages.error(request, 'Select a valid difficulty level.')
+        return redirect('role_interview')
+
+    try:
+        question_count = int(request.POST.get('count', 4))
+    except (TypeError, ValueError):
+        question_count = 0
+    if not 1 <= question_count <= 10:
+        messages.error(request, 'Choose between 1 and 10 questions.')
+        return redirect('role_interview')
+
+    job_description = request.POST.get('job_description', '').strip()
+    if len(job_description) > 12_000:
+        messages.error(request, 'Keep the job description to 12,000 characters or fewer.')
+        return redirect('role_interview')
+
+    role_session = RoleInterviewSession.objects.create(
+        user=request.user,
+        role=role,
+        role_slug=role_slug,
+        experience_level=experience_level,
+        focus_area=focus_area,
+        job_description=job_description,
+        difficulty=difficulty,
+        question_count=question_count,
+    )
+    try:
+        questions = InterviewService().create_role_questions(request.user, role_session)
+    except Exception:
+        role_session.delete()
+        logger.exception('Failed to generate role interview for %s', role)
+        messages.error(request, 'Unable to generate the role interview. Please try again.')
+        return redirect('role_interview')
+
+    if not questions:
+        role_session.delete()
+        messages.error(request, 'No interview questions were generated. Please try again.')
+        return redirect('role_interview')
+
+    cache.delete(f'dashboard_template_{request.user.id}')
+    messages.success(request, f'Generated {len(questions)} questions for the {role} role.')
+    return redirect('role_interview_session', session_id=role_session.id)
+
+
+@login_required
+def role_interview_session_view(request, session_id):
+    """Run one role session without mixing it with prior attempts."""
+    role_session = get_object_or_404(RoleInterviewSession, id=session_id, user=request.user)
+    questions = list(role_session.questions.order_by('id'))
+    if not questions:
+        messages.error(request, 'No questions were found for this role interview.')
+        return redirect('dashboard')
+
+    try:
+        current_index = int(request.GET.get('q', 0))
+    except (TypeError, ValueError):
+        current_index = 0
+    current_index = max(current_index, 0)
+    if current_index >= len(questions):
+        messages.success(request, 'Role interview completed!')
+        return redirect('dashboard')
+
+    return render(request, 'interview_core/interview.html', {
+        'topic': role_session.role,
+        'role_session': role_session,
+        'current_question': questions[current_index],
+        'current_index': current_index,
+        'total_questions': len(questions),
+        'next_index': current_index + 1,
+        'next_url': f"{reverse('role_interview_session', args=[role_session.id])}?q={current_index + 1}",
+    })
 
 @login_required
 def profile_view(request):
