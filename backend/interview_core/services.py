@@ -289,6 +289,63 @@ IMPORTANT:
         }]
 
 
+class GroqQuestionService(AIService):
+    """Generate interview questions through Groq without moving answer evaluation."""
+
+    def __init__(self):
+        self.api_key = os.getenv('GROQ_API_KEY')
+        if not self.api_key:
+            raise ValueError("GROQ_API_KEY environment variable is required for question generation")
+        self.base_url = "https://api.groq.com/openai/v1/chat/completions"
+        self.model = os.getenv('GROQ_QUESTION_MODEL', 'openai/gpt-oss-20b')
+
+    def _make_api_request(self, prompt):
+        """Make a text-completion request to Groq for interview questions."""
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.1,
+            "max_completion_tokens": 2000,
+        }
+
+        for attempt in range(2):
+            try:
+                response = requests.post(self.base_url, headers=headers, json=payload, timeout=30)
+            except requests.exceptions.RequestException as exc:
+                raise Exception("Failed to connect to Groq") from exc
+
+            try:
+                response_data = response.json()
+            except ValueError as exc:
+                raise Exception("Groq returned an invalid JSON response") from exc
+
+            provider_error = response_data.get('error')
+            if response.status_code != 200:
+                detail = provider_error.get('message') if isinstance(provider_error, dict) else None
+                raise Exception(f"Groq request failed: {detail or f'status {response.status_code}'}")
+            if isinstance(provider_error, dict):
+                raise Exception(f"Groq request failed: {provider_error.get('message') or 'unknown provider error'}")
+
+            try:
+                choice = response_data['choices'][0]
+                content = choice['message'].get('content')
+            except (KeyError, IndexError, TypeError) as exc:
+                raise Exception("Groq returned an invalid completion response") from exc
+
+            if isinstance(content, str) and content.strip():
+                return content
+
+            finish_reason = choice.get('finish_reason') or 'unknown'
+            if attempt == 0:
+                logger.warning("Groq returned an empty completion (finish_reason=%s); retrying once.", finish_reason)
+                continue
+            raise Exception(f"Groq returned an empty completion (finish_reason={finish_reason}).")
+
+
 class AudioService:
     """Service for handling audio processing using Groq API"""
     
@@ -340,7 +397,11 @@ class InterviewService:
     """Service for handling interview-related business logic"""
     
     def __init__(self):
-        self.ai_service = AIService()
+        self.question_service = GroqQuestionService()
+        # Instantiate the OpenRouter evaluator only when an answer is submitted.
+        # This keeps generated questions on Groq and avoids requiring an
+        # OPENROUTER_API_KEY merely to start an interview.
+        self.ai_service = None
         try:
             self.audio_service = AudioService()
         except Exception as e:
@@ -349,7 +410,7 @@ class InterviewService:
     
     def create_questions(self, user, topic, count=4, difficulty="medium"):
         """Create interview questions for a user with specified count and difficulty"""
-        questions_data = self.ai_service.generate_questions(topic, count, difficulty)
+        questions_data = self.question_service.generate_questions(topic, count, difficulty)
         
         logger.debug("Creating %d questions in database for user %s", len(questions_data), user.username)
         
@@ -368,7 +429,7 @@ class InterviewService:
 
     def create_role_questions(self, user, role_session):
         """Persist a dedicated, isolated set of questions for one role session."""
-        questions_data = self.ai_service.generate_role_questions(
+        questions_data = self.question_service.generate_role_questions(
             role=role_session.role,
             experience_level=role_session.experience_level,
             focus_area=role_session.focus_area or 'mixed',
@@ -405,6 +466,8 @@ class InterviewService:
         user_text = self.audio_service.transcribe_audio(audio_file)
         
         # Compare with reference answer
+        if self.ai_service is None:
+            self.ai_service = AIService()
         comparison = self.ai_service.compare_answers(question.answer, user_text, question.question)
         
         # Mark question as answered

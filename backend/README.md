@@ -85,6 +85,8 @@ backend/
 ## Environment Variables
 
 Required in `.env`:
-- `OPENROUTER_API_KEY` - AI service API key
+- `GROQ_API_KEY` - Required for question generation and audio transcription
+- `GROQ_QUESTION_MODEL` - Optional question-generation model override (defaults to `openai/gpt-oss-20b`)
+- `OPENROUTER_API_KEY` - Required only for answer evaluation and resume parsing
 - `SECRET_KEY` - Django secret key
 - `DEBUG` - Debug mode (True/False)
