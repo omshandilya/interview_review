@@ -265,9 +265,9 @@ def submit_answer_view(request):
                 'success': True
             })
             
-        except Exception as e:
+        except Exception:
             logger.exception("Error in submit_answer_view")
-            return JsonResponse({'error': str(e)}, status=500)
+            return JsonResponse({'error': 'Failed to process your answer. Please try again.'}, status=500)
     
     return JsonResponse({'error': 'Invalid method'}, status=405)
 
@@ -432,9 +432,9 @@ def upload_resume_view(request):
                 
                 return redirect('interview', topic='Resume-Based')
                 
-            except Exception as e:
+            except Exception:
                 logger.exception("Error in upload_resume_view")
-                messages.error(request, f'Failed to process resume: {str(e)}')
+                messages.error(request, 'Failed to process your resume. Please try again.')
         else:
             messages.error(request, 'Please upload a resume file.')
     
