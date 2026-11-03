@@ -6,7 +6,6 @@ from django.http import JsonResponse, HttpResponse
 from django.conf import settings
 from django.core.cache import cache
 from django.urls import reverse
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 from django.db import models
 from .models import InterviewQuestion, RoleInterviewSession, UserAnswer, SavedQuestion
@@ -240,7 +239,6 @@ def interview_view(request, topic):
     return render(request, 'interview_core/interview.html', context)
 
 @login_required
-@csrf_exempt
 def submit_answer_view(request):
     if request.method == 'POST':
         try:
