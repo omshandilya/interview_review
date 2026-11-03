@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch
 from django.test import SimpleTestCase
 
 from .services import AIService, GroqQuestionService
+from .resume_parser import ResumeParser
 
 
 class AIServiceTests(SimpleTestCase):
@@ -67,3 +68,59 @@ class GroqQuestionServiceTests(SimpleTestCase):
         self.assertEqual(kwargs['headers']['Authorization'], 'Bearer test-groq-key')
         self.assertEqual(kwargs['json']['model'], 'openai/gpt-oss-20b')
         self.assertEqual(kwargs['json']['max_completion_tokens'], 2000)
+
+
+class ResumeParserTests(SimpleTestCase):
+    def setUp(self):
+        self.parser = object.__new__(ResumeParser)
+        self.parser.api_key = 'test-openrouter-key'
+        self.parser.base_url = 'https://openrouter.ai/api/v1/chat/completions'
+        self.parser.model = 'mistralai/mistral-7b-instruct'
+
+    @staticmethod
+    def response(payload, status_code=200):
+        response = Mock(status_code=status_code)
+        response.json.return_value = payload
+        return response
+
+    def test_empty_resume_text_raises_value_error(self):
+        with self.assertRaises(ValueError):
+            self.parser.parse_resume_with_ai("   ")
+
+    @patch('interview_core.resume_parser.requests.post')
+    def test_successful_parsing_returns_structured_data(self, post):
+        ai_payload = {
+            'choices': [{
+                'message': {
+                    'content': '```json\n{"skills": ["Python", "Django"], "experience": ["Backend Dev"], "projects": ["API"]}\n```'
+                }
+            }]
+        }
+        post.return_value = self.response(ai_payload)
+
+        data = self.parser.parse_resume_with_ai("Experienced Python Developer")
+        self.assertEqual(data['skills'], ['Python', 'Django'])
+        self.assertEqual(data['experience'], ['Backend Dev'])
+        self.assertEqual(data['projects'], ['API'])
+
+    @patch('interview_core.resume_parser.requests.post')
+    def test_api_failure_raises_exception_instead_of_fake_data(self, post):
+        post.return_value = self.response({'error': {'message': 'Quota exceeded'}}, status_code=429)
+
+        with self.assertRaises(Exception) as ctx:
+            self.parser.parse_resume_with_ai("Experienced Python Developer")
+        self.assertIn("Quota exceeded", str(ctx.exception))
+
+    @patch('interview_core.resume_parser.requests.post')
+    def test_malformed_json_raises_exception(self, post):
+        ai_payload = {
+            'choices': [{
+                'message': {
+                    'content': 'Sorry, I cannot parse this.'
+                }
+            }]
+        }
+        post.return_value = self.response(ai_payload)
+
+        with self.assertRaises(Exception):
+            self.parser.parse_resume_with_ai("Experienced Python Developer")
