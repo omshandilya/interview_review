@@ -16,11 +16,10 @@ from .role_catalog import (
     label_for,
     normalize_custom_role,
 )
-from .services import InterviewService
+from .services import InterviewService, TextToSpeechService
 from .serializers import RegisterSerializer
 import json
 import logging
-from hashlib import sha256
 
 logger = logging.getLogger(__name__)
 
@@ -30,9 +29,8 @@ logger = logging.getLogger(__name__)
 def synthesize_speech_view(request):
     """Return Google Neural2 speech for a short interview prompt.
 
-    The endpoint deliberately keeps Google credentials server-side. A 503 is
-    returned for configuration/provider errors so the client can immediately
-    fall back to the browser's native speech synthesis.
+    The endpoint delegates speech synthesis and caching to TextToSpeechService.
+    A 503 is returned on failure so the client can fall back to browser TTS.
     """
     if not settings.GOOGLE_TTS_ENABLED:
         return JsonResponse({'error': 'Cloud text-to-speech is disabled.'}, status=503)
@@ -51,40 +49,12 @@ def synthesize_speech_view(request):
     if len(text) > 5_000:
         return JsonResponse({'error': 'Text must be 5,000 characters or fewer.'}, status=400)
 
-    text = text.strip()
-    cache_hash = sha256(
-        f'{settings.GOOGLE_TTS_VOICE}:{settings.GOOGLE_TTS_LANGUAGE_CODE}:{text}'.encode()
-    ).hexdigest()
-    cache_key = f'neural2_audio:{cache_hash}'
-    audio_content = cache.get(cache_key)
-
-    if audio_content is None:
-        try:
-            from google.cloud import texttospeech
-            from google.oauth2 import service_account
-
-            credentials = None
-            if settings.GOOGLE_APPLICATION_CREDENTIALS_JSON:
-                credentials = service_account.Credentials.from_service_account_info(
-                    json.loads(settings.GOOGLE_APPLICATION_CREDENTIALS_JSON)
-                )
-
-            client = texttospeech.TextToSpeechClient(credentials=credentials)
-            response = client.synthesize_speech(
-                input=texttospeech.SynthesisInput(text=text),
-                voice=texttospeech.VoiceSelectionParams(
-                    language_code=settings.GOOGLE_TTS_LANGUAGE_CODE,
-                    name=settings.GOOGLE_TTS_VOICE,
-                ),
-                audio_config=texttospeech.AudioConfig(
-                    audio_encoding=texttospeech.AudioEncoding.MP3,
-                ),
-            )
-            audio_content = response.audio_content
-            cache.set(cache_key, audio_content, timeout=60 * 60)
-        except Exception:
-            logger.exception('Google Cloud Text-to-Speech synthesis failed')
-            return JsonResponse({'error': 'Cloud text-to-speech is unavailable.'}, status=503)
+    try:
+        tts_service = TextToSpeechService()
+        audio_content = tts_service.synthesize(text)
+    except Exception:
+        logger.exception('Google Cloud Text-to-Speech synthesis failed')
+        return JsonResponse({'error': 'Cloud text-to-speech is unavailable.'}, status=503)
 
     response = HttpResponse(audio_content, content_type='audio/mpeg')
     response['Cache-Control'] = 'private, max-age=3600'

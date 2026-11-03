@@ -3,8 +3,11 @@ import json
 import re
 import logging
 import requests
+from hashlib import sha256
 from django.conf import settings
+from django.core.cache import cache
 from .models import InterviewQuestion, UserAnswer
+from .exceptions import AudioProcessingError, QuestionNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -346,21 +349,69 @@ class GroqQuestionService(AIService):
             raise Exception(f"Groq returned an empty completion (finish_reason={finish_reason}).")
 
 
+class TextToSpeechService:
+    """Service for handling Google Cloud Text-to-Speech synthesis and caching."""
+
+    def __init__(self):
+        self.enabled = getattr(settings, 'GOOGLE_TTS_ENABLED', False)
+        self.voice = getattr(settings, 'GOOGLE_TTS_VOICE', 'en-IN-Neural2-A')
+        self.language_code = getattr(settings, 'GOOGLE_TTS_LANGUAGE_CODE', 'en-IN')
+        self.credentials_json = getattr(settings, 'GOOGLE_APPLICATION_CREDENTIALS_JSON', '')
+
+    def synthesize(self, text: str) -> bytes:
+        """Synthesize text into speech audio bytes (MP3) with caching."""
+        if not self.enabled:
+            raise Exception("Cloud text-to-speech is disabled.")
+
+        text = text.strip()
+        cache_hash = sha256(
+            f'{self.voice}:{self.language_code}:{text}'.encode()
+        ).hexdigest()
+        cache_key = f'neural2_audio:{cache_hash}'
+        audio_content = cache.get(cache_key)
+
+        if audio_content is not None:
+            return audio_content
+
+        from google.cloud import texttospeech
+        from google.oauth2 import service_account
+
+        credentials = None
+        if self.credentials_json:
+            credentials = service_account.Credentials.from_service_account_info(
+                json.loads(self.credentials_json)
+            )
+
+        client = texttospeech.TextToSpeechClient(credentials=credentials)
+        response = client.synthesize_speech(
+            input=texttospeech.SynthesisInput(text=text),
+            voice=texttospeech.VoiceSelectionParams(
+                language_code=self.language_code,
+                name=self.voice,
+            ),
+            audio_config=texttospeech.AudioConfig(
+                audio_encoding=texttospeech.AudioEncoding.MP3,
+            ),
+        )
+        audio_content = response.audio_content
+        cache.set(cache_key, audio_content, timeout=60 * 60)
+        return audio_content
+
+
 class AudioService:
     """Service for handling audio processing using Groq API"""
     
     def __init__(self):
         self.api_key = os.getenv('GROQ_API_KEY')
         if not self.api_key:
-            logger.error("GROQ_API_KEY not found in environment variables")
+            raise ValueError("GROQ_API_KEY environment variable is required for audio transcription")
         self.base_url = "https://api.groq.com/openai/v1/audio/transcriptions"
         self.model = "whisper-large-v3-turbo"
     
     def transcribe_audio(self, audio_file):
         """Transcribe audio file to text using Groq API"""
         if not self.api_key:
-            logger.warning("Transcription skipped: GROQ_API_KEY is missing.")
-            return "Audio transcription unavailable. Please type your answer."
+            raise ValueError("GROQ_API_KEY is required for audio transcription")
         
         try:
             headers = {
@@ -379,18 +430,23 @@ class AudioService:
             response = requests.post(self.base_url, headers=headers, files=files, data=data, timeout=30)
             
             if response.status_code != 200:
-                logger.error("Groq API error: %s", response.text)
-                return "Transcription failed: API error. Please type your answer."
+                logger.error("Groq API error during transcription: %s", response.text)
+                raise AudioProcessingError(f"Transcription failed: API returned status {response.status_code}")
                 
             result = response.json()
-            return result.get('text', '')
+            text = result.get('text', '')
+            if not text:
+                raise AudioProcessingError("Transcription returned empty text.")
+            return text
             
         except requests.exceptions.RequestException as e:
             logger.error("Network error during transcription: %s", str(e))
-            return "Transcription failed: Network error. Please type your answer."
+            raise AudioProcessingError(f"Network error during transcription: {str(e)}") from e
+        except AudioProcessingError:
+            raise
         except Exception as e:
             logger.error("Transcription failed: %s", str(e))
-            return "Transcription failed: Please type your answer."
+            raise AudioProcessingError(f"Transcription failed: {str(e)}") from e
 
 
 class InterviewService:
@@ -460,9 +516,11 @@ class InterviewService:
         try:
             question = InterviewQuestion.objects.get(id=question_id, user=user)
         except InterviewQuestion.DoesNotExist:
-            raise Exception("Question not found")
+            raise QuestionNotFoundError("Question not found")
         
         # Transcribe audio (temporary processing)
+        if self.audio_service is None:
+            self.audio_service = AudioService()
         user_text = self.audio_service.transcribe_audio(audio_file)
         
         # Compare with reference answer

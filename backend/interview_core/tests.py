@@ -1,9 +1,12 @@
 from unittest.mock import Mock, patch
+import os
 
 from django.test import SimpleTestCase
+from django.core.cache import cache
 
-from .services import AIService, GroqQuestionService
+from .services import AIService, GroqQuestionService, AudioService, TextToSpeechService
 from .resume_parser import ResumeParser
+from .exceptions import AudioProcessingError
 
 
 class AIServiceTests(SimpleTestCase):
@@ -68,6 +71,70 @@ class GroqQuestionServiceTests(SimpleTestCase):
         self.assertEqual(kwargs['headers']['Authorization'], 'Bearer test-groq-key')
         self.assertEqual(kwargs['json']['model'], 'openai/gpt-oss-20b')
         self.assertEqual(kwargs['json']['max_completion_tokens'], 2000)
+
+
+class AudioServiceTests(SimpleTestCase):
+    def test_init_raises_value_error_when_key_missing(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(ValueError) as ctx:
+                AudioService()
+            self.assertIn("GROQ_API_KEY", str(ctx.exception))
+
+    @patch('interview_core.services.requests.post')
+    def test_transcribe_audio_raises_audio_processing_error_on_api_error(self, post):
+        service = object.__new__(AudioService)
+        service.api_key = 'fake-key'
+        service.base_url = 'https://api.groq.com/openai/v1/audio/transcriptions'
+        service.model = 'whisper-large-v3-turbo'
+
+        mock_file = Mock()
+        mock_file.name = 'answer.wav'
+        mock_file.read.return_value = b'audio-bytes'
+        mock_file.content_type = 'audio/wav'
+
+        post.return_value = Mock(status_code=500, text='Server Error')
+
+        with self.assertRaises(AudioProcessingError):
+            service.transcribe_audio(mock_file)
+
+    @patch('interview_core.services.requests.post')
+    def test_transcribe_audio_returns_transcribed_text(self, post):
+        service = object.__new__(AudioService)
+        service.api_key = 'fake-key'
+        service.base_url = 'https://api.groq.com/openai/v1/audio/transcriptions'
+        service.model = 'whisper-large-v3-turbo'
+
+        mock_file = Mock()
+        mock_file.name = 'answer.wav'
+        mock_file.read.return_value = b'audio-bytes'
+        mock_file.content_type = 'audio/wav'
+
+        post.return_value = Mock(status_code=200, json=lambda: {'text': 'This is my interview answer'})
+
+        result = service.transcribe_audio(mock_file)
+        self.assertEqual(result, 'This is my interview answer')
+
+
+class TextToSpeechServiceTests(SimpleTestCase):
+    def test_synthesize_raises_when_disabled(self):
+        service = TextToSpeechService()
+        service.enabled = False
+        with self.assertRaisesMessage(Exception, "Cloud text-to-speech is disabled."):
+            service.synthesize("Hello")
+
+    def test_synthesize_returns_cached_audio(self):
+        service = TextToSpeechService()
+        service.enabled = True
+        service.voice = 'test-voice'
+        service.language_code = 'en-US'
+
+        # Seed cache
+        from hashlib import sha256
+        cache_hash = sha256(f'test-voice:en-US:Hello'.encode()).hexdigest()
+        cache.set(f'neural2_audio:{cache_hash}', b'fake-mp3-bytes', timeout=60)
+
+        result = service.synthesize("Hello")
+        self.assertEqual(result, b'fake-mp3-bytes')
 
 
 class ResumeParserTests(SimpleTestCase):
