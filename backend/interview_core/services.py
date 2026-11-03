@@ -510,6 +510,54 @@ class InterviewService:
             len(created_questions), user.username, role_session.role,
         )
         return created_questions
+
+    def create_resume_questions(self, user, parsed_data, count=4, difficulty="medium"):
+        """Generate and persist personalized interview questions based on parsed resume data."""
+        categories = {
+            'Skills': parsed_data.get('skills', [])[:3],
+            'Experience': parsed_data.get('experience', [])[:2],
+            'Projects': parsed_data.get('projects', [])[:2],
+        }
+
+        active_categories = {k: v for k, v in categories.items() if v}
+        if not active_categories:
+            fallback = InterviewQuestion.objects.create(
+                user=user,
+                topic="Resume-Based",
+                question="Tell me about your most significant project and the technologies you used.",
+                answer="Describe the project scope, your role, technical challenges, and key achievements."
+            )
+            return [fallback]
+
+        questions_per_category = max(1, count // len(active_categories))
+        all_questions = []
+
+        for category, items in active_categories.items():
+            topic_context = f"{category}: {', '.join(items)}"
+            try:
+                questions = self.create_questions(user, topic_context, questions_per_category, difficulty)
+                all_questions.extend(questions)
+            except Exception as e:
+                logger.warning("AI failed for category %s: %s", category, str(e))
+                fallback_question = InterviewQuestion.objects.create(
+                    user=user,
+                    topic="Resume-Based",
+                    question=f"Tell me about your experience with {category.lower()}.",
+                    answer=f"Describe your background and expertise in {category.lower()}."
+                )
+                all_questions.append(fallback_question)
+
+        if not all_questions:
+            fallback = InterviewQuestion.objects.create(
+                user=user,
+                topic="Resume-Based",
+                question="Tell me about your most significant project and the technologies you used.",
+                answer="Describe the project scope, your role, technical challenges, and key achievements."
+            )
+            all_questions.append(fallback)
+
+        logger.info("Created %d resume questions for user %s", len(all_questions), user.username)
+        return all_questions
     
     def process_answer(self, user, question_id, audio_file):
         """Process user's audio answer"""

@@ -16,6 +16,7 @@ from .role_catalog import (
     label_for,
     normalize_custom_role,
 )
+from .resume_parser import ResumeParser
 from .services import InterviewService, TextToSpeechService
 from .serializers import RegisterSerializer
 import json
@@ -279,137 +280,55 @@ def saved_questions_view(request):
     return render(request, 'interview_core/saved_questions.html', {'saved_questions': saved_questions})
 
 @login_required
+@require_POST
 def upload_resume_view(request):
-    logger.debug("upload_resume: method=%s, POST keys=%s, FILES keys=%s", request.method, list(request.POST.keys()), list(request.FILES.keys()))
-    
-    if request.method == 'POST':
-        
-        resume_file = request.FILES.get('resume')
+    """Handle resume upload, parse it, and generate personalized interview questions."""
+    resume_file = request.FILES.get('resume')
+    if not resume_file:
+        messages.error(request, 'Please upload a resume file.')
+        return redirect('dashboard')
+
+    ALLOWED_EXTENSIONS = {"pdf", "docx"}
+    ALLOWED_CONTENT_TYPES = {
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }
+    file_ext = resume_file.name.rsplit(".", 1)[-1].lower() if "." in resume_file.name else ""
+    if file_ext not in ALLOWED_EXTENSIONS or resume_file.content_type not in ALLOWED_CONTENT_TYPES:
+        logger.warning(
+            "upload_resume: rejected file '%s' (ext=%s, content_type=%s)",
+            resume_file.name, file_ext, resume_file.content_type,
+        )
+        messages.error(request, "Only PDF and DOCX files are accepted. Please upload a valid resume.")
+        return redirect("dashboard")
+
+    if resume_file.size > 10 * 1024 * 1024:
+        messages.error(request, "Resume file must be 10 MB or smaller.")
+        return redirect("dashboard")
+
+    try:
         count = int(request.POST.get('count', 4))
-        difficulty = request.POST.get('difficulty', 'medium')
-        
-        logger.debug("upload_resume: file=%s, count=%d, difficulty=%s", resume_file, count, difficulty)
-        
-        # Store count in session for interview view
-        request.session['interview_count'] = count
-        
-        logger.debug("Starting resume processing")
-        
-        if resume_file:
-            # -- File-type validation ------------------------------------------
-            ALLOWED_EXTENSIONS = {"pdf", "docx"}
-            ALLOWED_CONTENT_TYPES = {
-                "application/pdf",
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            }
-            file_ext = resume_file.name.rsplit(".", 1)[-1].lower() if "." in resume_file.name else ""
-            if file_ext not in ALLOWED_EXTENSIONS or resume_file.content_type not in ALLOWED_CONTENT_TYPES:
-                logger.warning(
-                    "upload_resume: rejected file '%s' (ext=%s, content_type=%s)",
-                    resume_file.name, file_ext, resume_file.content_type,
-                )
-                messages.error(request, "Only PDF and DOCX files are accepted. Please upload a valid resume.")
-                return redirect("dashboard")
-            if resume_file.size > 10 * 1024 * 1024:
-                messages.error(request, "Resume file must be 10 MB or smaller.")
-                return redirect("dashboard")
-            # ------------------------------------------------------------------
+    except (TypeError, ValueError):
+        count = 4
 
-            try:
-                from .resume_parser import ResumeParser
-                from .models import Resume
-                
-                # Parse resume (no file saving)
-                parser = ResumeParser()
-                parsed_data = parser.process_resume(resume_file)
-                
-                # Save only extracted data to database
-                resume = Resume.objects.create(
-                    user=request.user,
-                    extracted_text=parsed_data['extracted_text'],
-                    skills=parsed_data['skills'],
-                    experience=parsed_data['experience'],
-                    projects=parsed_data['projects']
-                )
-                # File is automatically deleted after processing
-                
-                logger.debug("Resume saved with ID: %d", resume.id)
-                
-                logger.debug("Preparing keywords for AI model")
-                # Generate questions based on resume
-                interview_service = InterviewService()
-                all_questions = []
-                
-                # Generate questions for each category
-                categories = {
-                    'Skills': parsed_data['skills'][:3],  # Top 3 skills
-                    'Experience': parsed_data['experience'][:2],  # Top 2 experiences
-                    'Projects': parsed_data['projects'][:2]  # Top 2 projects
-                }
-                
-                logger.debug("Categories prepared: %s", categories)
-                questions_per_category = max(1, count // len([c for c in categories.values() if c]))
-                logger.debug("Questions per category: %d", questions_per_category)
-                
-                logger.debug("Generating questions with AI model")
-                for category, items in categories.items():
-                    if items:
-                        topic_context = f"{category}: {', '.join(items)}"
-                        logger.debug("Sending to AI: topic=%s", topic_context)
-                        try:
-                            questions = interview_service.create_questions(
-                                request.user, 
-                                topic_context, 
-                                questions_per_category,
-                                difficulty
-                            )
-                            all_questions.extend(questions)
-                            logger.info("Generated %d questions for %s", len(questions), category)
-                        except Exception as e:
-                            logger.warning("AI failed for %s: %s", category, str(e))
-                            # Create fallback question for this category
-                            from .models import InterviewQuestion
-                            fallback_question = InterviewQuestion.objects.create(
-                                user=request.user,
-                                topic="Resume-Based",
-                                question=f"Tell me about your experience with {category.lower()}.",
-                                answer=f"Describe your background and expertise in {category.lower()}."
-                            )
-                            all_questions.append(fallback_question)
-                            logger.debug("Created fallback question for %s", category)
-                
-                logger.debug("Finalizing questions")
-                if all_questions:
-                    logger.info("Generated total %d questions from resume", len(all_questions))
-                    messages.success(request, f'Generated {len(all_questions)} personalized questions based on your resume!')
-                else:
-                    logger.warning("No questions generated, creating fallback")
-                    # Create a fallback question if everything fails
-                    from .models import InterviewQuestion
-                    fallback_question = InterviewQuestion.objects.create(
-                        user=request.user,
-                        topic="Resume-Based",
-                        question="Tell me about your most significant project and the technologies you used.",
-                        answer="Describe the project scope, your role, technical challenges, and key achievements."
-                    )
-                    messages.success(request, 'Generated personalized questions based on your resume!')
-                
-                logger.debug("Redirecting to interview")
-                
-                # Delete resume data after questions are generated
-                resume.delete()
-                logger.debug("Resume data deleted after question generation")
-                
-                return redirect('interview', topic='Resume-Based')
-                
-            except Exception:
-                logger.exception("Error in upload_resume_view")
-                messages.error(request, 'Failed to process your resume. Please try again.')
-        else:
-            messages.error(request, 'Please upload a resume file.')
-    
-    return redirect('dashboard')
+    difficulty = request.POST.get('difficulty', 'medium')
+    request.session['interview_count'] = count
 
+    try:
+        parsed_data = ResumeParser().process_resume(resume_file)
+        questions = InterviewService().create_resume_questions(
+            user=request.user,
+            parsed_data=parsed_data,
+            count=count,
+            difficulty=difficulty,
+        )
+        messages.success(request, f'Generated {len(questions)} personalized questions based on your resume!')
+        return redirect('interview', topic='Resume-Based')
+
+    except Exception:
+        logger.exception("Error in upload_resume_view")
+        messages.error(request, 'Failed to process your resume. Please try again.')
+        return redirect('dashboard')
 
 
 @login_required

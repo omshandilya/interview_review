@@ -191,3 +191,46 @@ class ResumeParserTests(SimpleTestCase):
 
         with self.assertRaises(Exception):
             self.parser.parse_resume_with_ai("Experienced Python Developer")
+
+
+from django.test import TestCase
+from django.contrib.auth.models import User
+from .services import InterviewService
+from .models import InterviewQuestion
+
+
+class InterviewServiceResumeTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='testuser', password='password123')
+        self.service = object.__new__(InterviewService)
+        self.service.question_service = Mock()
+        self.service.ai_service = None
+        self.service.audio_service = None
+
+    def test_create_resume_questions_with_empty_categories_creates_fallback(self):
+        questions = self.service.create_resume_questions(
+            user=self.user,
+            parsed_data={'skills': [], 'experience': [], 'projects': []},
+            count=4,
+            difficulty='medium'
+        )
+        self.assertEqual(len(questions), 1)
+        self.assertEqual(questions[0].topic, 'Resume-Based')
+
+    def test_create_resume_questions_generates_per_category(self):
+        self.service.create_questions = Mock(side_effect=lambda user, topic, count, difficulty: [
+            InterviewQuestion.objects.create(user=user, topic=topic, question=f"Q for {topic}", answer="A")
+        ])
+        parsed_data = {
+            'skills': ['Python'],
+            'experience': ['Django Dev'],
+            'projects': ['Web app']
+        }
+        questions = self.service.create_resume_questions(
+            user=self.user,
+            parsed_data=parsed_data,
+            count=3,
+            difficulty='medium'
+        )
+        self.assertEqual(len(questions), 3)
+        self.assertEqual(self.service.create_questions.call_count, 3)
