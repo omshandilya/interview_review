@@ -574,6 +574,7 @@ def profile_view(request):
     
     return render(request, 'interview_core/profile.html')
 
+@require_POST
 def logout_view(request):
     logout(request)
     messages.success(request, 'Logged out successfully!')
