@@ -326,6 +326,25 @@ def upload_resume_view(request):
         logger.debug("Starting resume processing")
         
         if resume_file:
+            # -- File-type validation ------------------------------------------
+            ALLOWED_EXTENSIONS = {"pdf", "docx"}
+            ALLOWED_CONTENT_TYPES = {
+                "application/pdf",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            }
+            file_ext = resume_file.name.rsplit(".", 1)[-1].lower() if "." in resume_file.name else ""
+            if file_ext not in ALLOWED_EXTENSIONS or resume_file.content_type not in ALLOWED_CONTENT_TYPES:
+                logger.warning(
+                    "upload_resume: rejected file '%s' (ext=%s, content_type=%s)",
+                    resume_file.name, file_ext, resume_file.content_type,
+                )
+                messages.error(request, "Only PDF and DOCX files are accepted. Please upload a valid resume.")
+                return redirect("dashboard")
+            if resume_file.size > 10 * 1024 * 1024:
+                messages.error(request, "Resume file must be 10 MB or smaller.")
+                return redirect("dashboard")
+            # ------------------------------------------------------------------
+
             try:
                 from .resume_parser import ResumeParser
                 from .models import Resume
